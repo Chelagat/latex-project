@@ -48,7 +48,6 @@ def crossValidation(paths):
 	accuracy = 0
 	for i in range(len(paths)):
 		training_paths = paths[:i] + paths[i+1:]
-		print training_paths
 		guessingCharacter = train(training_paths)
 		accuracy += test(guessingCharacter, paths[i])
 	return accuracy/len(paths)
