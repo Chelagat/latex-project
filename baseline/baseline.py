@@ -3,7 +3,7 @@ from os import listdir
 from os.path import isfile, join
 
 def updateMarkdown(markdown, filename):
-	with open(filename) as f:
+	with  open(filename) as f:
 		for line in f:
 			if line.find('<mo') == -1 and line.find('<mi') == -1: continue
 			line = line[:-2].lstrip()
@@ -34,6 +34,13 @@ def guess(guessingCharacter, filename):
 			end = line.find('<',1)
 			if line[start+1:end] == guessingCharacter: correct += 1
 	return correct, total
+
+
+def testTrace(prediction, filename):
+	with open(filename) as f:
+		for line in f:
+
+
 
 def test(guessingCharacter, d):
 	correct, total = 0, 0
