@@ -1,19 +1,29 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from sklearn import svm
 import json
 import signal
 import sys
 import logging
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as pl
+from collections import defaultdict
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
 
+import random
+import optunity
+import optunity.metrics
 from natsort import natsorted
 from xml.dom.minidom import parseString
 
 # hwrt modules
 import os, sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import handwritten_data
 from __init__ import formula_to_dbid
@@ -70,6 +80,7 @@ def normalize_symbol_name(symbol_name):
 
 
 def read(folder, filepath, short_filename):
+  #  print short_filename
     """
     Read a single InkML file
 
@@ -152,9 +163,12 @@ def read(folder, filepath, short_filename):
 
         trace_views = tg.findall('{http://www.w3.org/2003/InkML}traceView')
         symbol = []
+        trace_ids = []
         for traceView in trace_views:
-            hw.mapping[value] += [int(traceView.attrib['traceDataRef'])]
+            trace_ids += [int(traceView.attrib['traceDataRef'])]
             symbol.append(int(traceView.attrib['traceDataRef']))
+
+        hw.mapping[value] += [tuple(trace_ids)]
         segmentation.append(symbol)
     hw.symbol_stream = symbol_stream
     hw.segmentation = segmentation
@@ -166,11 +180,20 @@ def read(folder, filepath, short_filename):
     hw.inkml = beautify_xml(filepath)
     hw.filepath = filepath
     print "Segmentation: {}".format(hw.segmentation)
-    print hw.mapping
+    for key,values in hw.mapping.iteritems():
+        for val in values:
+            hw.inv_mapping[val] = key
+
+   # print "Before inverting: {}".format(hw.mapping)
+   # print "After inverting: {}".format(hw.inv_mapping)
     return hw
 
 
+
 def read_folder(folder):
+    global TRAINING_X
+    global TRAINING_Y
+
     """
     Parameters
     ----------
@@ -185,7 +208,8 @@ def read_folder(folder):
     import glob
     recordings = []
     filenames =  os.listdir(folder[0] + folder[1])
-    for filename in filenames[:2]: #natsorted(glob.glob("%s/*.inkml" % folder)):
+    for i, filename in enumerate(filenames[:30]): #natsorted(glob.glob("%s/*.inkml" % folder)):
+       # filename = "formulaire001-equation003.inkml"
         filename_copy = filename
         filename = folder[0] + folder[1] + filename
         #print filename
@@ -209,15 +233,93 @@ def read_folder(folder):
             '''
 
         print hw.formula_in_latex
-
-
         recordings.append(hw)
       # break
 
     for hw in recordings:
-        hw.show()
-    return recordings
+        x,y = hw.get_training_example()
 
+        TRAINING_X += x
+        TRAINING_Y += y
+
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(TRAINING_X[index])
+        TEST_Y.append(TRAINING_Y[index])
+
+    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    print "Done"
+    X = TRAINING_X
+
+    for i in range(1, len(X)):
+        if X[i-1] == X[i]:
+            print "SAME FEATURES!!!"
+
+
+    y_map = {}
+    counter = 0
+    NEW_TRAINING_Y = []
+    weights = []
+    freq = defaultdict(int)
+    for y in TRAINING_Y:
+        freq[y] += 1
+        if y in y_map:
+            NEW_TRAINING_Y.append(y_map[y])
+            continue
+
+        NEW_TRAINING_Y.append(counter)
+        y_map[y] = counter
+        counter += 1
+
+    for y in TRAINING_Y:
+        weights.append(1.0 /freq[y])
+
+
+    Y = NEW_TRAINING_Y
+
+
+    for example,y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
+        print len(example), y, new_y
+
+    x_test = X
+    y_test = Y
+    '''
+    def svm_auc(logC, logGamma):
+        model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
+        decision_values = model.decision_function(x_test)
+        return optunity.metrics.roc_auc(y_test, decision_values)
+
+    '''
+    clf = svm.SVC(decision_function_shape='ovo', gamma= 0.100, C=1000.0)
+    clf.fit(X, Y, weights)
+    #hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+   # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    clf.decision_function_shape = "ovr"
+    error = 0
+
+    for i in range(len(TEST_X)):
+        dec = clf.decision_function([TEST_X[i]])
+        print "Dec: {}".format(dec)
+        print "Max: {}".format(max(dec[0]))
+        max_index = np.argmax(dec[0])
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TEST_Y[i]:
+                    error += 1
+
+        '''
+        data = np.reshape(X[i], (480,640))
+        pl.imshow(data)
+        pl.savefig("results/Result_{}".format(i))
+        '''
+
+
+    print "error: {}".format(1.0*error / len(TEST_Y))
 
 def main(folder):
     """
@@ -238,6 +340,8 @@ def handler(signum, frame):
     sys.exit(-1)
 
 if __name__ == '__main__':
+    TRAINING_X = []
+    TRAINING_Y = []
     signal.signal(signal.SIGINT, handler)
     folder = ("/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/")
     main(folder)
