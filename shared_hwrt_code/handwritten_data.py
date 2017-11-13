@@ -13,6 +13,7 @@ import numpy
 import pprint
 from collections import defaultdict
 import numpy as np
+import itertools
 
 class HandwrittenData(object):
     """Represents a handwritten symbol."""
@@ -20,6 +21,7 @@ class HandwrittenData(object):
                  formula_in_latex=None, wild_point_count=0,
                  missing_stroke=0, user_id=0, user_name='', segmentation=None):
         self.mapping = defaultdict(list)
+        self.inv_mapping = defaultdict(list)
         self.raw_data_json = raw_data_json
         self.formula_id = formula_id
         self.filename = filename
@@ -41,8 +43,8 @@ class HandwrittenData(object):
             self.segmentation = [[i for i in
                                   range(len(json.loads(self.raw_data_json)))]]
 
-        print raw_data_json
-        print "segmentation: {}".format(segmentation)
+       # print raw_data_json
+      #  print "segmentation: {}".format(segmentation)
         assert wild_point_count >= 0
         assert missing_stroke >= 0
         self.fix_times()
@@ -286,6 +288,8 @@ class HandwrittenData(object):
 
         colors = _get_colors(self.segmentation)
         for symbols, color in zip(self.segmentation, colors):
+
+           # print "Symbol: {}".format(self.inv_mapping[tuple(symbols)])
             fig = plt.figure()
             ax = fig.add_subplot(111)
             for stroke_index in symbols:
@@ -335,9 +339,11 @@ class HandwrittenData(object):
 
 
 
+          #  print list(itertools.chain.from_iterable(new_data))
 
-            plt.imshow(new_data, cmap=plt.get_cmap('gray'))
-            plt.savefig("current_{}".format(symbols))
+          #  plt.imshow(new_data, cmap=plt.get_cmap('gray'))
+          #  plt.savefig("current_{}".format(symbols))
+            break
            # print data
            # data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
            # print "Non grey: {}".format(non_grey)
@@ -345,6 +351,109 @@ class HandwrittenData(object):
          #
 
     #    plt.show()c
+
+    def get_training_example(self):
+        """Show the data graphically in a new pop-up window."""
+
+        # prevent the following error:
+        # '_tkinter.TclError: no display name and no $DISPLAY environment
+        #    variable'
+        # import matplotlib
+        # matplotlib.use('GTK3Agg', warn=False)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        x, y = [], []
+
+        pointlist = self.get_pointlist()
+        if 'pen_down' in pointlist[0][0]:
+            assert len(pointlist) > 1, \
+                "Lenght of pointlist was %i. Got: %s" % (len(pointlist),
+                                                         pointlist)
+            # Create a new pointlist that models pen-down strokes and pen
+            # up strokes
+            new_pointlist = []
+            last_pendown_state = None
+            stroke = []
+            for point in pointlist[0]:
+                if last_pendown_state is None:
+                    last_pendown_state = point['pen_down']
+                if point['pen_down'] != last_pendown_state:
+                    new_pointlist.append(stroke)
+                    last_pendown_state = point['pen_down']
+                    stroke = []
+                else:
+                    stroke.append(point)
+            new_pointlist.append(stroke)  # add the last stroke
+            pointlist = new_pointlist
+
+        _, ax = plt.subplots()
+        ax.set_title("Raw data id: %s, "
+                     "Formula_id: %s" % (str(self.raw_data_id),
+                                         str(self.formula_id)))
+
+        colors = _get_colors(self.segmentation)
+        fig = plt.figure()
+        for symbols, color in zip(self.segmentation, colors):
+            symbol_str = self.inv_mapping[tuple(symbols)]
+            plt.clf()
+            ax = fig.add_subplot(111)
+            for stroke_index in symbols:
+                stroke = pointlist[stroke_index]
+                xs, ys = [], []
+                for p in stroke:
+                    xs.append(p['x'])
+                    ys.append(p['y'])
+                    ax.plot(xs, ys, color="#000000")
+
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first...
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.axis('off')
+            fig.canvas.draw()
+            # fig.savefig("test_fig.png")
+          #  np.set_printoptions(threshold=np.nan)
+            # Now we can save it to a numpy array.
+            #   non_grey = []
+            data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+            # print data
+            # print fig.canvas.get_width_height()
+            # print data.shape
+            data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
+
+           # print data.shape
+            data_dict = defaultdict(int)
+            new_data = np.zeros(data.shape)
+            for row in range(len(data)):
+                for col in range(len(data[0])):
+                    point = data[row][col]
+                    #  if point != 191:
+                    #       new_data[row][col] = 0
+                    if point != 191:
+                        new_data[row][col] = 1
+                        data_dict[(row, col)] = 1
+
+            flattened = list(itertools.chain.from_iterable(new_data))
+            x.append(flattened)
+            y.append(symbol_str)
+
+
+            plt.imshow(new_data, cmap=plt.get_cmap('gray'))
+            plt.savefig("all_ones")
+            # print data
+            # data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            # print "Non grey: {}".format(non_grey)
+            #
+            #
+
+       # print x,y
+        print "Done with one equation!"
+        return x,y
+    #    plt.show()
 
     def count_single_dots(self):
         """Count all strokes of this recording that have only a single dot.
