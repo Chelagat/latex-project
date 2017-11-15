@@ -10,7 +10,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
+import pickle
 from collections import defaultdict
+
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
@@ -124,8 +126,7 @@ def read(folder, filepath, short_filename):
     for annotation in annotations:
         if annotation.attrib['type'] == 'truth':
             formula_in_latex = annotation.text
-    hw = handwritten_data.HandwrittenData(json.dumps(recording),
-                                          formula_in_latex=formula_in_latex, filename= filepath, raw_data_id=folder[1]+ short_filename)
+    hw = handwritten_data.HandwrittenData(json.dumps(recording), formula_in_latex=formula_in_latex, filename = short_filename, filepath=folder[0]+folder[1], raw_data_id=folder[1]+ short_filename)
     for annotation in annotations:
         if annotation.attrib['type'] == 'writer':
             hw.writer = annotation.text
@@ -208,7 +209,9 @@ def read_folder(folder):
     import glob
     recordings = []
     filenames =  os.listdir(folder[0] + folder[1])
-    for i, filename in enumerate(filenames[:30]): #natsorted(glob.glob("%s/*.inkml" % folder)):
+    for i, filename in enumerate(filenames): #natsorted(glob.glob("%s/*.inkml" % folder)):
+        X_NP_FOLDER = "Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays"
+        LATEX_TRUTH_FILE = "Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
        # filename = "formulaire001-equation003.inkml"
         filename_copy = filename
         filename = folder[0] + folder[1] + filename
@@ -236,9 +239,11 @@ def read_folder(folder):
         recordings.append(hw)
       # break
 
+    TRAINING_Y = []
+    TRAINING_X = []
+
     for hw in recordings:
         x,y = hw.get_training_example()
-
         TRAINING_X += x
         TRAINING_Y += y
 
@@ -254,11 +259,6 @@ def read_folder(folder):
 
     print "Done"
     X = TRAINING_X
-
-    for i in range(1, len(X)):
-        if X[i-1] == X[i]:
-            print "SAME FEATURES!!!"
-
 
     y_map = {}
     counter = 0
@@ -276,28 +276,28 @@ def read_folder(folder):
         counter += 1
 
     for y in TRAINING_Y:
-        weights.append(1.0 /freq[y])
-
+        weights.append(1.0 / freq[y])
 
     Y = NEW_TRAINING_Y
 
-
-    for example,y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
+    for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
         print len(example), y, new_y
 
+    '''
     x_test = X
     y_test = Y
-    '''
+
     def svm_auc(logC, logGamma):
         model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
         decision_values = model.decision_function(x_test)
         return optunity.metrics.roc_auc(y_test, decision_values)
 
     '''
-    clf = svm.SVC(decision_function_shape='ovo', gamma= 0.100, C=1000.0)
+
+    clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
     clf.fit(X, Y, weights)
-    #hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
-   # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
     clf.decision_function_shape = "ovr"
     error = 0
 
@@ -318,8 +318,134 @@ def read_folder(folder):
         pl.savefig("results/Result_{}".format(i))
         '''
 
+    print "error: {}".format(1.0 * error / len(TEST_Y))
 
-    print "error: {}".format(1.0*error / len(TEST_Y))
+    '''
+    X_NP_FOLDER = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    latex_truth = []
+    for hw in recordings:
+        x,y =  hw.get_training_example()
+        filename = X_NP_FOLDER + hw.filename
+        with open(filename, "w") as fp:  # Pickling
+            pickle.dump(x, fp)
+
+        latex_truth += y
+
+    with open(LATEX_TRUTH_FILE, "w") as fp:
+        pickle.dump(latex_truth, fp)
+
+    print "Done with saving to file: Saved: {} training examples.".format(len(recordings))
+    '''
+
+def svm_train_test():
+    X_NP_FOLDER = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    TRAINING_Y = []
+    TRAINING_X = []
+
+    with open(LATEX_TRUTH_FILE, "rb") as fp:
+        TRAINING_Y = pickle.load(fp)
+
+    x_files = os.listdir(X_NP_FOLDER)
+    for x_file in x_files:
+        x_file = X_NP_FOLDER + x_file
+        with open(x_file, "rb") as fp:
+            TRAINING_X += pickle.load(fp)
+
+    print len(TRAINING_X)
+    print TRAINING_Y
+
+
+def svm_train():
+    X_NP_FOLDER = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    TRAINING_Y = []
+    TRAINING_X = []
+
+    with open(LATEX_TRUTH_FILE, "rb") as fp:
+        TRAINING_Y = pickle.load(fp)
+
+
+    x_files =  os.listdir(X_NP_FOLDER)
+    for x_file in x_files:
+        x_file = X_NP_FOLDER + x_file
+        with open(x_file, "rb") as fp:
+            TRAINING_X += pickle.load(fp)
+
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(TRAINING_X[index])
+        TEST_Y.append(TRAINING_Y[index])
+
+    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    print "Done"
+    X = TRAINING_X
+
+    y_map = {}
+    counter = 0
+    NEW_TRAINING_Y = []
+    weights = []
+    freq = defaultdict(int)
+    for y in TRAINING_Y:
+        freq[y] += 1
+        if y in y_map:
+            NEW_TRAINING_Y.append(y_map[y])
+            continue
+
+        NEW_TRAINING_Y.append(counter)
+        y_map[y] = counter
+        counter += 1
+
+    for y in TRAINING_Y:
+        weights.append(1.0 / freq[y])
+
+    Y = NEW_TRAINING_Y
+
+    for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
+        print len(example), y, new_y
+
+    '''
+    x_test = X
+    y_test = Y
+    
+    def svm_auc(logC, logGamma):
+        model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
+        decision_values = model.decision_function(x_test)
+        return optunity.metrics.roc_auc(y_test, decision_values)
+
+    '''
+
+    clf = svm.SVC(decision_function_shape='ovo', gamma=0.100, C=1000.0)
+    clf.fit(X, Y, weights)
+    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    clf.decision_function_shape = "ovr"
+    error = 0
+
+    for i in range(len(TEST_X)):
+        dec = clf.decision_function([TEST_X[i]])
+        print "Dec: {}".format(dec)
+        print "Max: {}".format(max(dec[0]))
+        max_index = np.argmax(dec[0])
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TEST_Y[i]:
+                    error += 1
+
+        '''
+        data = np.reshape(X[i], (480,640))
+        pl.imshow(data)
+        pl.savefig("results/Result_{}".format(i))
+        '''
+
+    print "error: {}".format(1.0 * error / len(TEST_Y))
+
 
 def main(folder):
     """
@@ -342,6 +468,8 @@ def handler(signum, frame):
 if __name__ == '__main__':
     TRAINING_X = []
     TRAINING_Y = []
+
     signal.signal(signal.SIGINT, handler)
     folder = ("/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/")
     main(folder)
+   # svm_train_test()
