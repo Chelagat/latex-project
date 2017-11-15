@@ -7,8 +7,8 @@ logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
 
-import pymysql
-import pymysql.cursors
+#import pymysql
+#import pymysql.cursors
 
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +18,7 @@ import utils
 __formula_to_dbid_cache = None
 username2id = {}
 
-
+'''
 def formula_to_dbid(formula_str, backslash_fix=False):
     """
     Convert a LaTeX formula to the database index.
@@ -211,3 +211,4 @@ def insert_symbol_mapping(raw_data_id, symbol_id, user_id, strokes):
             user_id)
     cursor.execute(sql, data)
     connection.commit()
+'''

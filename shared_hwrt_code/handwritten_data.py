@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""Representation of a recording of on-line handwritten data. On-line means
-   that the pen trajectory is given (and not online as in 'Internet').
+"""
+Representation of a recording of on-line handwritten data. On-line means
+that the pen trajectory is given (and not online as in 'Internet').
 """
 
 import logging
@@ -14,13 +14,19 @@ import pprint
 from collections import defaultdict
 import numpy as np
 import itertools
+from PIL import Image, ImageChops
+from skimage.feature import hog
+
+from skimage import data, color, exposure
+
 
 class HandwrittenData(object):
     """Represents a handwritten symbol."""
-    def __init__(self, raw_data_json, filename=None, formula_id=None, raw_data_id=None,
+    def __init__(self, raw_data_json, filename=None,filepath=None, formula_id=None, raw_data_id=None,
                  formula_in_latex=None, wild_point_count=0,
                  missing_stroke=0, user_id=0, user_name='', segmentation=None):
         self.mapping = defaultdict(list)
+        self.filepath = filepath
         self.inv_mapping = defaultdict(list)
         self.raw_data_json = raw_data_json
         self.formula_id = formula_id
@@ -287,7 +293,7 @@ class HandwrittenData(object):
                                          str(self.formula_id)))
 
         colors = _get_colors(self.segmentation)
-        for symbols, color in zip(self.segmentation, colors):
+        for symbols, color_1 in zip(self.segmentation, colors):
 
            # print "Symbol: {}".format(self.inv_mapping[tuple(symbols)])
             fig = plt.figure()
@@ -352,6 +358,17 @@ class HandwrittenData(object):
 
     #    plt.show()c
 
+
+
+
+    def trim(self, image):
+        bg = Image.new(image.mode, image.size, image.getpixel((0, 0)))
+        diff = ImageChops.difference(image, bg)
+        bbox = diff.getbbox()
+        if not bbox:
+            return image
+        return image.crop(bbox)
+
     def get_training_example(self):
         """Show the data graphically in a new pop-up window."""
 
@@ -396,7 +413,7 @@ class HandwrittenData(object):
 
         colors = _get_colors(self.segmentation)
         fig = plt.figure()
-        for symbols, color in zip(self.segmentation, colors):
+        for symbols, color_1 in zip(self.segmentation, colors):
             symbol_str = self.inv_mapping[tuple(symbols)]
             plt.clf()
             ax = fig.add_subplot(111)
@@ -423,35 +440,43 @@ class HandwrittenData(object):
             # print fig.canvas.get_width_height()
             # print data.shape
             data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            '''
             data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
 
            # print data.shape
             data_dict = defaultdict(int)
             new_data = np.zeros(data.shape)
+            flipped_data = np.zeros(data.shape)
+           # print data
             for row in range(len(data)):
                 for col in range(len(data[0])):
                     point = data[row][col]
-                    #  if point != 191:
-                    #       new_data[row][col] = 0
-                    if point != 191:
+                    if point != 255:
+                        flipped_data[row][col] = 0
+                    else:
+                        flipped_data[row][col] = 1
+
+                    if point != 255:
                         new_data[row][col] = 1
                         data_dict[(row, col)] = 1
 
-            flattened = list(itertools.chain.from_iterable(new_data))
+            '''
+           # new_data = new_data[:, 100:-100]
+          #  flipped_data = flipped_data[:,100:-100]
+          #  plt.savefig("results/"+symbol_str)
+            image = color.rgb2gray(data)
+            fd, hog_image = hog(image, orientations=8, pixels_per_cell=(32, 32),
+                                cells_per_block=(1, 1), visualise=True)
+
+            # Rescale histogram for better display
+            hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 0.02))
+            hog_np_array = np.asarray(hog_image_rescaled)
+
+
+            flattened = list(itertools.chain.from_iterable(hog_np_array))
             x.append(flattened)
             y.append(symbol_str)
 
-
-            plt.imshow(new_data, cmap=plt.get_cmap('gray'))
-            plt.savefig("all_ones")
-            # print data
-            # data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            # print "Non grey: {}".format(non_grey)
-            #
-            #
-
-       # print x,y
-        print "Done with one equation!"
         return x,y
     #    plt.show()
 
