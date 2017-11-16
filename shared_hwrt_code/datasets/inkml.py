@@ -8,6 +8,7 @@ import sys
 import logging
 import numpy as np
 import matplotlib
+from sys import argv
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 import pickle
@@ -18,9 +19,6 @@ logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     stream=sys.stdout)
 
 import random
-import optunity
-import optunity.metrics
-from natsort import natsorted
 from xml.dom.minidom import parseString
 
 # hwrt modules
@@ -28,7 +26,9 @@ import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import handwritten_data
-from __init__ import formula_to_dbid
+
+
+# from __init__ import formula_to_dbid
 
 
 def beautify_xml(path):
@@ -48,8 +48,8 @@ def beautify_xml(path):
 
     pretty_print = lambda data: '\n'.join([line for line in
                                            parseString(data)
-                                           .toprettyxml(indent=' ' * 2)
-                                           .split('\n')
+                                          .toprettyxml(indent=' ' * 2)
+                                          .split('\n')
                                            if line.strip()])
     return pretty_print(content)
 
@@ -81,8 +81,11 @@ def normalize_symbol_name(symbol_name):
     return symbol_name
 
 
-def read(folder, filepath, short_filename):
-  #  print short_filename
+def read(folder, filepath, short_filename, directory):
+    print filepath
+    if filepath[-2:] == 'lg':
+        return None
+    #  print short_filename
     """
     Read a single InkML file
 
@@ -96,9 +99,19 @@ def read(folder, filepath, short_filename):
     HandwrittenData :
         The parsed InkML file as a HandwrittenData object
     """
-    import xml.etree.ElementTree
-    root = xml.etree.ElementTree.parse(filepath).getroot()
+    import xml.etree.ElementTree as ET
+    data = ""
+    with open(filepath, "r") as myfile:
+        data = myfile.read()
 
+    myfile.close()
+    try:
+        root = ET.fromstring(data)
+    except:
+        return None
+
+    if root == None:
+        return None
     # Get the raw data
     recording = []
     strokes = sorted(root.findall('{http://www.w3.org/2003/InkML}trace'),
@@ -126,7 +139,9 @@ def read(folder, filepath, short_filename):
     for annotation in annotations:
         if annotation.attrib['type'] == 'truth':
             formula_in_latex = annotation.text
-    hw = handwritten_data.HandwrittenData(json.dumps(recording), formula_in_latex=formula_in_latex, filename = short_filename, filepath=folder[0]+folder[1], raw_data_id=folder[1]+ short_filename)
+    hw = handwritten_data.HandwrittenData(json.dumps(recording), formula_in_latex=formula_in_latex,
+                                          filename=short_filename, filepath=folder[0] + directory,
+                                          raw_data_id=directory + short_filename)
     for annotation in annotations:
         if annotation.attrib['type'] == 'writer':
             hw.writer = annotation.text
@@ -147,7 +162,7 @@ def read(folder, filepath, short_filename):
     symbol_stream = []  # has to be consistent with segmentation
     for tg in trace_group.findall('{http://www.w3.org/2003/InkML}traceGroup'):
         annotations = tg.findall('{http://www.w3.org/2003/InkML}annotation')
-       # anno_xml = tg.findall('{http://www.w3.org/2003/InkML}annotationXML')
+        # anno_xml = tg.findall('{http://www.w3.org/2003/InkML}annotationXML')
         if len(annotations) != 1:
             raise ValueError("%i annotations found for '%s'." %
                              (len(annotations), filepath))
@@ -174,24 +189,26 @@ def read(folder, filepath, short_filename):
     hw.symbol_stream = symbol_stream
     hw.segmentation = segmentation
     _flat_seg = [stroke2 for symbol2 in segmentation for stroke2 in symbol2]
+    if len(_flat_seg) != len(recording):
+        print "SEGMENTATION LENGTH IS OFF"
+        return None
     assert len(_flat_seg) == len(recording), \
         ("Segmentation had length %i, but recording has %i strokes (%s)" %
          (len(_flat_seg), len(recording), filepath))
     assert set(_flat_seg) == set(range(len(_flat_seg)))
     hw.inkml = beautify_xml(filepath)
     hw.filepath = filepath
-    print "Segmentation: {}".format(hw.segmentation)
-    for key,values in hw.mapping.iteritems():
+   # print "Segmentation: {}".format(hw.segmentation)
+    for key, values in hw.mapping.iteritems():
         for val in values:
             hw.inv_mapping[val] = key
 
-   # print "Before inverting: {}".format(hw.mapping)
-   # print "After inverting: {}".format(hw.inv_mapping)
+            # print "Before inverting: {}".format(hw.mapping)
+            # print "After inverting: {}".format(hw.inv_mapping)
     return hw
 
 
-
-def read_folder(folder):
+def read_folder(folder, start, end):
     global TRAINING_X
     global TRAINING_Y
 
@@ -208,22 +225,31 @@ def read_folder(folder):
     """
     import glob
     recordings = []
-    filenames =  os.listdir(folder[0] + folder[1])
-    for i, filename in enumerate(filenames): #natsorted(glob.glob("%s/*.inkml" % folder)):
-        X_NP_FOLDER = "Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays"
-        LATEX_TRUTH_FILE = "Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
-       # filename = "formulaire001-equation003.inkml"
-        filename_copy = filename
-        filename = folder[0] + folder[1] + filename
-        #print filename
 
-        hw = read(folder, filename, filename_copy)
-        if hw.formula_in_latex is not None:
-            hw.formula_in_latex = hw.formula_in_latex.strip()
-        if hw.formula_in_latex is None or \
-           not hw.formula_in_latex.startswith('$') or \
-           not hw.formula_in_latex.endswith('$'):
-            continue
+    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model.pickle"
+    for directory in folder[start:end]:
+        filenames = os.listdir(folder[0] + directory)
+        error = 0
+       # print "FILENAMES: {}".format(filenames)
+        for i, filename in enumerate(filenames[:10]):  # natsorted(glob.glob("%s/*.inkml" % folder)):
+
+            # filename = "formulaire001-equation003.inkml"
+            filename_copy = filename
+            filename = folder[0] + directory + filename
+            # print filename
+
+            hw = read(folder, filename, filename_copy, directory)
+            if hw == None:
+                error += 1
+                continue
+            if hw.formula_in_latex is not None:
+                hw.formula_in_latex = hw.formula_in_latex.strip()
+            if hw.formula_in_latex is None or \
+                not hw.formula_in_latex.startswith('$') or \
+                not hw.formula_in_latex.endswith('$'):
+                continue
             '''
             if hw.formula_in_latex is not None:
                 logging.info("Starts with: %s",
@@ -235,15 +261,17 @@ def read_folder(folder):
             hw.show()
             '''
 
-        print hw.formula_in_latex
-        recordings.append(hw)
-      # break
+            print hw.formula_in_latex
+            recordings.append(hw)
+            # break
+
+        print "Out of {} files, {} were not parsed properly. ".format(len(filenames), error)
 
     TRAINING_Y = []
     TRAINING_X = []
 
     for hw in recordings:
-        x,y = hw.get_training_example()
+        x, y = hw.get_training_example()
         TRAINING_X += x
         TRAINING_Y += y
 
@@ -296,6 +324,10 @@ def read_folder(folder):
 
     clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
     clf.fit(X, Y, weights)
+
+    with open(SVM_MODEL_FILE, "w") as fp:
+        pickle.dump(clf, fp)
+
     # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
     # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
     clf.decision_function_shape = "ovr"
@@ -338,9 +370,11 @@ def read_folder(folder):
     print "Done with saving to file: Saved: {} training examples.".format(len(recordings))
     '''
 
+
 def svm_train_test():
-    X_NP_FOLDER = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
-    LATEX_TRUTH_FILE = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth.pickle"
+    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model.pickle"
     TRAINING_Y = []
     TRAINING_X = []
 
@@ -360,14 +394,14 @@ def svm_train_test():
 def svm_train():
     X_NP_FOLDER = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
     LATEX_TRUTH_FILE = "/Users/norahborus/Documents/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model.pickle"
     TRAINING_Y = []
     TRAINING_X = []
 
     with open(LATEX_TRUTH_FILE, "rb") as fp:
         TRAINING_Y = pickle.load(fp)
 
-
-    x_files =  os.listdir(X_NP_FOLDER)
+    x_files = os.listdir(X_NP_FOLDER)
     for x_file in x_files:
         x_file = X_NP_FOLDER + x_file
         with open(x_file, "rb") as fp:
@@ -412,7 +446,7 @@ def svm_train():
     '''
     x_test = X
     y_test = Y
-    
+
     def svm_auc(logC, logGamma):
         model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
         decision_values = model.decision_function(x_test)
@@ -422,6 +456,7 @@ def svm_train():
 
     clf = svm.SVC(decision_function_shape='ovo', gamma=0.100, C=1000.0)
     clf.fit(X, Y, weights)
+
     # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
     # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
     clf.decision_function_shape = "ovr"
@@ -465,11 +500,21 @@ def handler(signum, frame):
     print('Signal handler called with signal %i' % signum)
     sys.exit(-1)
 
+def getopts(argv):
+    opts = {}  # Empty dictionary to store key-value pairs.
+    while argv:  # While there are arguments left to parse...
+        if argv[0][0] == '-':  # Found a "-name value" pair.
+            opts[argv[0]] = argv[1]  # Add key and value to the dictionary.
+        argv = argv[1:]  # Reduce the argument list by copying it starting from index 1.
+    return opts
+
 if __name__ == '__main__':
     TRAINING_X = []
     TRAINING_Y = []
-
+    myargs = getopts(argv)
+    start = myargs['-s']
+    end = myargs['-e']
     signal.signal(signal.SIGINT, handler)
-    folder = ("/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/")
-    main(folder)
-   # svm_train_test()
+    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    main(folder, start, end)
+    # svm_train_test()
