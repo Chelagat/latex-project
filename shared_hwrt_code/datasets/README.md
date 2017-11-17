@@ -1,9 +1,9 @@
 ## PROGRESS REPORT: CONVERTING HANDWRITTEN MATH EXPRESSIONS TO LATEX
 # Overview
--Segmentation Baseline: cseg.py
--Character Recognition SVM: inkml.py
--Parser Baseline: inkml.py
--Train & Test Data: in baseline directory
+- Segmentation Baseline: cseg.py
+- Character Recognition SVM: inkml.py
+- Parser Baseline: inkml.py
+- Train & Test Data: in baseline directory
 
 
 # Instructions
