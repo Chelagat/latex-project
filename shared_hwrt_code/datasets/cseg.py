@@ -72,7 +72,7 @@ def read_data(path, folders):
 
 
 def main():
-    training_folders = ["CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    training_folders = ["CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
 
     total_correct, total, total_correct_chars, total_chars = read_data('/Users/norahborus/Documents/latex-project/baseline/training_data/',training_folders)
     print 'FIRST ACCURACY: ', 100. * total_correct / total
