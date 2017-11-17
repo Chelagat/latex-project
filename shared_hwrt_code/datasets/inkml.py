@@ -82,7 +82,7 @@ def normalize_symbol_name(symbol_name):
 
 
 def read(folder, filepath, short_filename, directory):
-    print filepath
+    #print filepath
     if filepath[-2:] == 'lg':
         return None
     import xml.etree.ElementTree
@@ -190,7 +190,7 @@ def read_folder(folder, start, end):
     for directory in folder[start:end]:
         filenames = os.listdir(folder[0] + directory)
         invalid_inputs = 0
-        for i, filename in enumerate(filenames):
+        for i, filename in enumerate(filenames[:2]):
 
             filename_copy = filename
             filename = folder[0] + directory + filename
@@ -327,6 +327,6 @@ if __name__ == '__main__':
     start = int(myargs['-s'])
     end = int(myargs['-e'])
     signal.signal(signal.SIGINT, handler)
-    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
     main(folder, start, end)
 
