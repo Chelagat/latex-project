@@ -327,6 +327,6 @@ if __name__ == '__main__':
     start = int(myargs['-s'])
     end = int(myargs['-e'])
     signal.signal(signal.SIGINT, handler)
-    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
     main(folder, start, end)
 
