@@ -24,7 +24,7 @@ class HandwrittenData(object):
     """Represents a handwritten symbol."""
     def __init__(self, raw_data_json, filename=None,filepath=None, formula_id=None, raw_data_id=None,
                  formula_in_latex=None, wild_point_count=0,
-                 missing_stroke=0, user_id=0, user_name='', segmentation=None):
+                 missing_stroke=0, user_id=0, user_name='', segmentation=None, baseline_parsed=None):
         self.mapping = defaultdict(list)
         self.filepath = filepath
         self.inv_mapping = defaultdict(list)
@@ -32,6 +32,7 @@ class HandwrittenData(object):
         self.formula_id = formula_id
         self.filename = filename
         self.raw_data_id = raw_data_id
+        self.baseline_parsed = None
         self.formula_in_latex = formula_in_latex
         self.wild_point_count = wild_point_count
         self.missing_stroke = missing_stroke
@@ -440,6 +441,7 @@ class HandwrittenData(object):
             # print fig.canvas.get_width_height()
             # print data.shape
             data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+
             '''
             data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
 
@@ -471,10 +473,8 @@ class HandwrittenData(object):
             # Rescale histogram for better display
             hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 0.02))
             hog_np_array = np.asarray(hog_image_rescaled)
-
-
-            flattened = list(itertools.chain.from_iterable(hog_np_array))
-            x.append(flattened)
+            #print hog_np_array.shape
+            x.append(hog_np_array)
             y.append(symbol_str)
 
         return x,y

@@ -10,8 +10,8 @@ import numpy as np
 import matplotlib
 from sys import argv
 matplotlib.use("Agg")
-import matplotlib.pyplot as pl
-import pickle
+import itertools
+#from store_numpy_array import load_info
 from collections import defaultdict
 
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
@@ -183,14 +183,14 @@ def read(folder, filepath, short_filename, directory):
     return hw
 
 
-def read_folder(folder, start, end):
+def read_equations(folder,start,end):
     recordings = []
     parse_error = 0
     total_num_files = 0
     for directory in folder[start:end]:
         filenames = os.listdir(folder[0] + directory)
         invalid_inputs = 0
-        for i, filename in enumerate(filenames[:2]):
+        for i, filename in enumerate(filenames):
 
             filename_copy = filename
             filename = folder[0] + directory + filename
@@ -220,21 +220,18 @@ def read_folder(folder, start, end):
                 parse_error += 1
             recordings.append(hw)
             total_num_files += 1
-            # break
+            print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
+
+        print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
+
+    return recordings
+
+#def read_from_storage(folder, start, end):
+#    TRAINING_X, TRAINING_Y = load_info(folder[0], start, end)
+#    svm_train(TRAINING_X, TRAINING_Y)
 
 
-        print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
-
-    print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
-
-    TRAINING_Y = []
-    TRAINING_X = []
-
-    for index, hw in enumerate(recordings):
-        x, y = hw.get_training_example()
-        TRAINING_X += x
-        TRAINING_Y += y
-
+def svm_train(TRAINING_X, TRAINING_Y):
     TEST_X = []
     TEST_Y = []
     test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
@@ -252,7 +249,10 @@ def read_folder(folder, start, end):
     NEW_TRAINING_Y = []
     weights = []
     freq = defaultdict(int)
+   # print TRAINING_Y
+
     for y in TRAINING_Y:
+        print y, type(y)
         freq[y] += 1
         if y in y_map:
             NEW_TRAINING_Y.append(y_map[y])
@@ -267,9 +267,9 @@ def read_folder(folder, start, end):
 
     Y = NEW_TRAINING_Y
 
-    for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
-        print len(example), y, new_y
-
+   #  print len(X), len(Y)
+   # for example, y in zip(X, Y):
+   #     print len(example), y
 
     clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
     clf.fit(X, Y, weights)
@@ -290,8 +290,24 @@ def read_folder(folder, start, end):
                 if symbol != TEST_Y[i]:
                     error += 1
 
+    print "ACCURACY: SVM error: {}".format(1.0*error/len(TEST_Y))
+    return clf
 
-    print "ACCURACY: SVM character recognition error: {}".format(1.0 * error / len(TEST_Y))
+
+def read_folder(folder, start, end):
+    recordings = read_equations(folder, start, end)
+    TRAINING_Y = []
+    TRAINING_X = []
+
+    for index, hw in enumerate(recordings):
+        x, y = hw.get_training_example()
+        for i, np_array in enumerate(x):
+            x[i] = list(itertools.chain.from_iterable(np_array))
+
+        TRAINING_X += x
+        TRAINING_Y += y
+
+    svm_train(TRAINING_X, TRAINING_Y)
 
 def main(folder,start,end):
     """
