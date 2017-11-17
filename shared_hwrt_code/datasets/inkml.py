@@ -89,6 +89,7 @@ def read(folder, filepath, short_filename, directory):
     try:
         root = xml.etree.ElementTree.parse(filepath).getroot()
     except:
+        "error"
         return None
     # Get the raw data
     recording = []
@@ -298,7 +299,7 @@ def main(folder,start,end):
 
     Parameters
     ----------
-    folder : str
+    folder : list of str
     """
 
     logging.info(folder)
