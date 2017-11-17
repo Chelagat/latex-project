@@ -82,7 +82,7 @@ def normalize_symbol_name(symbol_name):
 
 
 def read(folder, filepath, short_filename, directory):
-    print filepath
+    # print filepath
     if filepath[-2:] == 'lg':
         return None
     #  print short_filename

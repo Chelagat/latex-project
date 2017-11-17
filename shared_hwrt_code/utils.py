@@ -10,7 +10,7 @@ import logging
 import sys
 import os
 import yaml
-import natsort
+# import natsort
 import time
 import datetime
 import subprocess
