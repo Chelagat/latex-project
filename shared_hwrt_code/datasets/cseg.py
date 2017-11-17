@@ -103,7 +103,6 @@ def segmentation_baseline(path, folders):
 
 def main():
     training_folders = ["CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
-
     total_correct_1, total_1, total_correct_chars_1, total_chars_1 = segmentation_baseline(
         '/Users/norahborus/Documents/latex-project/baseline/training_data/',training_folders)
 
