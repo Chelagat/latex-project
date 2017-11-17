@@ -24,11 +24,12 @@ class HandwrittenData(object):
     """Represents a handwritten symbol."""
     def __init__(self, raw_data_json, filename=None,filepath=None, formula_id=None, raw_data_id=None,
                  formula_in_latex=None, wild_point_count=0,
-                 missing_stroke=0, user_id=0, user_name='', segmentation=None):
+                 missing_stroke=0, user_id=0, user_name='', segmentation=None, baseline_parsed=None):
         self.mapping = defaultdict(list)
         self.filepath = filepath
         self.inv_mapping = defaultdict(list)
         self.raw_data_json = raw_data_json
+        self.baseline_parsed = None
         self.formula_id = formula_id
         self.filename = filename
         self.raw_data_id = raw_data_id
