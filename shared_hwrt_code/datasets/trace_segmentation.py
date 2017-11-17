@@ -9,6 +9,7 @@ import logging
 import numpy as np
 import matplotlib
 from sys import argv
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 import pickle
@@ -54,35 +55,7 @@ def beautify_xml(path):
     return pretty_print(content)
 
 
-def normalize_symbol_name(symbol_name):
-    """
-    Change symbol names to a version which is known by write-math.com
-
-    Parameters
-    ----------
-    symbol_name : str
-
-    Returns
-    -------
-    str
-    """
-    if symbol_name == '\\frac':
-        return '\\frac{}{}'
-    elif symbol_name == '\\sqrt':
-        return '\\sqrt{}'
-    elif symbol_name in ['&lt;', '\lt']:
-        return '<'
-    elif symbol_name in ['&gt;', '\gt']:
-        return '>'
-    elif symbol_name == '{':
-        return '\{'
-    elif symbol_name == '}':
-        return '\}'
-    return symbol_name
-
-
 def read(folder, filepath, short_filename, directory):
-    print filepath
     if filepath[-2:] == 'lg':
         return None
     import xml.etree.ElementTree
@@ -158,10 +131,9 @@ def read(folder, filepath, short_filename, directory):
         baseline_parsed[tuple(trace_ids)] = value
         hw.mapping[value] += [tuple(trace_ids)]
         segmentation.append(symbol)
-
-    hw.baseline_parsed = baseline_parsed
     hw.symbol_stream = symbol_stream
     hw.segmentation = segmentation
+    hw.baseline_parsed = baseline_parsed
     _flat_seg = [stroke2 for symbol2 in segmentation for stroke2 in symbol2]
     if len(_flat_seg) != len(recording):
         print "SEGMENTATION LENGTH IS OFF"
@@ -172,7 +144,9 @@ def read(folder, filepath, short_filename, directory):
     assert set(_flat_seg) == set(range(len(_flat_seg)))
     hw.inkml = beautify_xml(filepath)
     hw.filepath = filepath
-   # print "Segmentation: {}".format(hw.segmentation)
+    # print "Segmentation: {}".format(hw.segmentation)
+
+
     for key, values in hw.mapping.iteritems():
         for val in values:
             hw.inv_mapping[val] = key
@@ -183,56 +157,106 @@ def read(folder, filepath, short_filename, directory):
 
 
 def read_folder(folder, start, end):
+    global TRAINING_X
+    global TRAINING_Y
     recordings = []
-    parse_error = 0
-    total_num_files = 0
+    error = 0
+    total = 0
     for directory in folder[start:end]:
         filenames = os.listdir(folder[0] + directory)
-        invalid_inputs = 0
-        for i, filename in enumerate(filenames):
 
+        # print "FILENAMES: {}".format(filenames)
+        for i, filename in enumerate(filenames):  # natsorted(glob.glob("%s/*.inkml" % folder)):
+
+            # filename = "formulaire001-equation003.inkml"
             filename_copy = filename
             filename = folder[0] + directory + filename
             # print filename
 
             hw = read(folder, filename, filename_copy, directory)
+            # print hw.formula_in_latex
             if hw == None:
-                invalid_inputs += 1
                 continue
             if hw.formula_in_latex is not None:
                 hw.formula_in_latex = hw.formula_in_latex.strip()
-            else:
+            # if hw.formula_in_latex is None or \
+            #    not hw.formula_in_latex.startswith('$') or \
+            #    not hw.formula_in_latex.endswith('$'):
+            #    continue
+            '''
+            if hw.formula_in_latex is not None:
+                logging.info("Starts with: %s",
+                             str(hw.formula_in_latex.startswith('$')))
+                logging.info("ends with: %s",
+                             str(hw.formula_in_latex.endswith('$')))
+                logging.info(hw.formula_in_latex)
+                logging.info(hw.segmentation)
+                hw.show()
                 continue
-
-            print hw.baseline_parsed
-            recordings.append(hw)
+            '''
             baseline_parsing = ""
             sorted_tuples = sorted(hw.baseline_parsed)
             for key in sorted_tuples:
-                baseline_parsing += hw.baseline_parsed[key]
+                baseline_parsing+= hw.baseline_parsed[key]
 
             perfect_parsing = "".join(hw.formula_in_latex.split())
             if perfect_parsing[0] == '$':
-                baseline_parsing = "$" + baseline_parsing + "$"
-
+                baseline_parsing = "$"+ baseline_parsing + "$"
+            print "***********************************************"
+            print "File: {}".format(filename)
+            print "Perfect parsing:{}".format(perfect_parsing)
+            print "Baseline parsing:{}".format(baseline_parsing)
+            print "***********************************************"
             if perfect_parsing != baseline_parsing:
-                parse_error += 1
+                error += 1
             recordings.append(hw)
-            total_num_files += 1
+            total += 1
             # break
 
+    print "Baseline parsing: error: {}".format(1.0*error/total)
 
-        print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
+def svm_train_test(start, end):
+    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays_directory_" + str(
+        start) + "/"
+    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth_directory_" + str(
+        start) + ".txt"
+    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model_directory_" + str(
+        start) + ".pickle"
+    with open(SVM_MODEL_FILE, "r") as fp:
+        clf = pickle.load(fp)
 
-    print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
-
+    print type(clf)
     TRAINING_Y = []
     TRAINING_X = []
 
-    for index, hw in enumerate(recordings):
-        x, y = hw.get_training_example()
-        TRAINING_X += x
-        TRAINING_Y += y
+    with open(LATEX_TRUTH_FILE, "rb") as fp:
+        TRAINING_Y = pickle.load(fp)
+
+    x_files = os.listdir(X_NP_FOLDER)
+    for x_file in x_files:
+        x_file = X_NP_FOLDER + x_file
+        with open(x_file, "rb") as fp:
+            TRAINING_X += pickle.load(fp)
+
+    for x, y in zip(TRAINING_X, TRAINING_Y):
+        print "x:{},  y: {}".format(x, y)
+
+
+def svm_train():
+    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
+    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
+    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model.pickle"
+    TRAINING_Y = []
+    TRAINING_X = []
+
+    with open(LATEX_TRUTH_FILE, "rb") as fp:
+        TRAINING_Y = pickle.load(fp)
+
+    x_files = os.listdir(X_NP_FOLDER)
+    for x_file in x_files:
+        x_file = X_NP_FOLDER + x_file
+        with open(x_file, "rb") as fp:
+            TRAINING_X += pickle.load(fp)
 
     TEST_X = []
     TEST_Y = []
@@ -244,6 +268,7 @@ def read_folder(folder, start, end):
     TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
     TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
 
+    print "Done"
     X = TRAINING_X
 
     y_map = {}
@@ -269,8 +294,18 @@ def read_folder(folder, start, end):
     for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
         print len(example), y, new_y
 
+    '''
+    x_test = X
+    y_test = Y
 
-    clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
+    def svm_auc(logC, logGamma):
+        model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
+        decision_values = model.decision_function(x_test)
+        return optunity.metrics.roc_auc(y_test, decision_values)
+
+    '''
+
+    clf = svm.SVC(decision_function_shape='ovo', gamma=0.100, C=1000.0)
     clf.fit(X, Y, weights)
 
     # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
@@ -289,10 +324,16 @@ def read_folder(folder, start, end):
                 if symbol != TEST_Y[i]:
                     error += 1
 
+        '''
+        data = np.reshape(X[i], (480,640))
+        pl.imshow(data)
+        pl.savefig("results/Result_{}".format(i))
+        '''
 
-    print "ACCURACY: SVM character recognition error: {}".format(1.0 * error / len(TEST_Y))
+    print "error: {}".format(1.0 * error / len(TEST_Y))
 
-def main(folder,start,end):
+
+def main(folder, start, end):
     """
     Read folder.
 
@@ -302,13 +343,14 @@ def main(folder,start,end):
     """
 
     logging.info(folder)
-    read_folder(folder,start,end)
+    read_folder(folder, start, end)
 
 
 def handler(signum, frame):
     """Add signal handler to safely quit program."""
     print('Signal handler called with signal %i' % signum)
     sys.exit(-1)
+
 
 def getopts(argv):
     opts = {}  # Empty dictionary to store key-value pairs.
@@ -326,6 +368,8 @@ if __name__ == '__main__':
     start = int(myargs['-s'])
     end = int(myargs['-e'])
     signal.signal(signal.SIGINT, handler)
-    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CROHME_training_2011/",
+              "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
     main(folder, start, end)
+    # svm_train_test(start,end)
 
