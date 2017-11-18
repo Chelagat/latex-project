@@ -415,7 +415,7 @@ class HandwrittenData(object):
         colors = _get_colors(self.segmentation)
         fig = plt.figure()
         for symbols, color_1 in zip(self.segmentation, colors):
-            symbol_str = self.inv_mapping[tuple(symbols)]
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
             plt.clf()
             ax = fig.add_subplot(111)
             for stroke_index in symbols:

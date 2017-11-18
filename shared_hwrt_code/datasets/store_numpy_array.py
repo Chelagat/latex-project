@@ -7,6 +7,8 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 from inkml import svm_train
+from cnn_tutorial import cnn_train
+
 
 def store_info(path, folders, start,end):
     '''
@@ -14,12 +16,14 @@ def store_info(path, folders, start,end):
     '''
     #Idea: store sparse dictionary
     hw_objects = read_equations(folders, start, end)
+    print len(hw_objects)
     storage_directory = path + str(start) + str(end) + '/'
 
     if not os.path.exists(storage_directory):
         os.makedirs(storage_directory)
 
     for index, hw in enumerate(hw_objects):
+
         print "Done with #{}".format(index)
         x,y = hw.get_training_example()
         rep = {}
@@ -38,8 +42,14 @@ def store_info(path, folders, start,end):
 
             if 'symbol' not in rep:
                 rep['symbol'] = [[symbol, np_array_map]]
+                #print "*******************************************"
+                #print [[symbol, np_array_map]]
+                #print "*******************************************"
             else:
                 rep['symbol'].append([symbol, np_array_map])
+               # print "*******************************************"
+               # print [[symbol, np_array_map]]
+               # print "*******************************************"
 
 
         filename = storage_directory + hw.filename
@@ -74,9 +84,13 @@ def load_info(path, start, end):
             rep = json.loads(data)
 
         symbols = rep['symbol']
+       # print symbols
         for symbol in symbols:
-          #  print symbol[0]
-            TRAINING_Y.append(symbol[0])
+            ground_truth = str(symbol[0])
+            if ground_truth == '[]':
+                print "ERROR: ground truth is [] in file: {}".format(equation_file)
+
+            TRAINING_Y.append(str(symbol[0]))
             np_array_map = symbol[1]
             rows,cols = rep['num_rows'], rep['num_cols']
             np_array = np.zeros((rows,cols))
@@ -89,7 +103,7 @@ def load_info(path, start, end):
             #plt.savefig("results/{}".format(symbol[0]))
             TRAINING_X.append(list(itertools.chain.from_iterable(np_array)))
 
-
+   # print TRAINING_Y
     return TRAINING_X, TRAINING_Y
 
 def main():
@@ -97,8 +111,9 @@ def main():
     path = '/Users/norahborus/Documents/latex-project/baseline/training_data/'
     training_folders = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
     store_info(path, training_folders, 1,2)
-   # X, Y = load_info(path, 1,2)
-   # svm_train(X,Y)
+    X, Y = load_info(path, 1,2)
+    #cnn_train(X,Y)
+    svm_train(X,Y)
 
 
 

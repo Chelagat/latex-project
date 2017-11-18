@@ -115,9 +115,13 @@ def read(folder, filepath, short_filename, directory):
     # Get LaTeX
     formula_in_latex = None
     annotations = root.findall('{http://www.w3.org/2003/InkML}annotation')
+    DEBUG = False
     for annotation in annotations:
         if annotation.attrib['type'] == 'truth':
+            if DEBUG: print "****************DEBUG****************: annotation.txt: {}".format(annotation.text)
             formula_in_latex = annotation.text
+            if DEBUG: print "****************DEBUG****************: annotation.txt: {}".format(formula_in_latex)
+
     hw = handwritten_data.HandwrittenData(json.dumps(recording), formula_in_latex=formula_in_latex,
                                           filename=short_filename, filepath=folder[0] + directory,
                                           raw_data_id=directory + short_filename)
@@ -188,9 +192,10 @@ def read_equations(folder,start,end):
     parse_error = 0
     total_num_files = 0
     for directory in folder[start:end]:
+        print "DIRECTORY: {}".format(directory)
         filenames = os.listdir(folder[0] + directory)
         invalid_inputs = 0
-        for i, filename in enumerate(filenames):
+        for i, filename in enumerate(filenames[:20]):
 
             filename_copy = filename
             filename = folder[0] + directory + filename
@@ -206,7 +211,6 @@ def read_equations(folder,start,end):
                 continue
 
             print hw.baseline_parsed
-            recordings.append(hw)
             baseline_parsing = ""
             sorted_tuples = sorted(hw.baseline_parsed)
             for key in sorted_tuples:
@@ -220,9 +224,10 @@ def read_equations(folder,start,end):
                 parse_error += 1
             recordings.append(hw)
             total_num_files += 1
-            print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
 
-        print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
+        print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
+
+    print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
 
     return recordings
 
