@@ -58,9 +58,9 @@ def store_info(path, folders, start,end):
     '''
 
 
-def load_info(path, start, end):
+def load_info(path, folder):
     print "***********************************************"
-    storage_directory = path + str(start)+str(end) +'/'
+    storage_directory = path + folder
     if not os.path.exists(storage_directory):
         raise ValueError("Directory to load training data from does not exist!")
 
@@ -95,10 +95,12 @@ def load_info(path, start, end):
 def main():
 
     path = '/Users/norahborus/Documents/latex-project/baseline/training_data/'
-    training_folders = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
-    store_info(path, training_folders, 1,2)
-   # X, Y = load_info(path, 1,2)
-   # svm_train(X,Y)
+    training_folders = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+   # store_info(path, training_folders, 1,2)
+  #  print "STORED EVERYTHING FOR FOLDER: {}!".format(training_folders[4:5])
+    X, Y = load_info(path, "CROHME_training_2011_JSON/")
+    print "Training and svm predicting for data in: CROHME_training_2011_JSON/"
+    svm_train(X,Y)
 
 
 

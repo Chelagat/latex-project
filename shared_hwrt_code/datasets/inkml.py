@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import itertools
 #from store_numpy_array import load_info
 from collections import defaultdict
-
+import datetime
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
@@ -205,8 +205,6 @@ def read_equations(folder,start,end):
             else:
                 continue
 
-            print hw.baseline_parsed
-            recordings.append(hw)
             baseline_parsing = ""
             sorted_tuples = sorted(hw.baseline_parsed)
             for key in sorted_tuples:
@@ -220,7 +218,9 @@ def read_equations(folder,start,end):
                 parse_error += 1
             recordings.append(hw)
             total_num_files += 1
-            print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
+        
+
+	print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
 
         print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
 
