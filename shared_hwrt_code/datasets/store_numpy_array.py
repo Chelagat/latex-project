@@ -99,7 +99,7 @@ def main():
    # store_info(path, training_folders, 1,2)
   #  print "STORED EVERYTHING FOR FOLDER: {}!".format(training_folders[4:5])
     X, Y = load_info(path, "CROHME_training_2011_JSON/")
-    print "Training and svm predicting for data in: CROHME_training_2011_JSON/"
+   # print "Training and svm predicting for data in: CROHME_training_2011_JSON/"
     svm_train(X,Y)
 
 
