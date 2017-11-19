@@ -10,10 +10,10 @@ import numpy as np
 import matplotlib
 from sys import argv
 matplotlib.use("Agg")
-import matplotlib.pyplot as pl
-import pickle
+import itertools
+#from store_numpy_array import load_info
 from collections import defaultdict
-
+import datetime
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
@@ -82,40 +82,15 @@ def normalize_symbol_name(symbol_name):
 
 
 def read(folder, filepath, short_filename, directory):
-    print filepath
+    #print filepath
     if filepath[-2:] == 'lg':
         return None
-    #  print short_filename
-    """
-    Read a single InkML file
-
-    Parameters
-    ----------
-    filepath : string
-        path to the (readable) InkML file
-
-    Returns
-    -------
-    HandwrittenData :
-        The parsed InkML file as a HandwrittenData object
-    """
-    import xml.etree.ElementTree as ET
-    data = ""
-    with open(filepath, "r") as myfile:
-        data = myfile.read()
-
-    myfile.close()
+    import xml.etree.ElementTree
     try:
-        root = ET.fromstring(data)
+        root = xml.etree.ElementTree.parse(filepath).getroot()
     except:
+        "error"
         return None
-
-    if root == None:
-        return None
-   
-   # import xml.etree.ElementTree
-   # root = xml.etree.ElementTree.parse(filepath).getroot()
-   # print root
     # Get the raw data
     recording = []
     strokes = sorted(root.findall('{http://www.w3.org/2003/InkML}trace'),
@@ -164,6 +139,7 @@ def read(folder, filepath, short_filename, directory):
                         (len(trace_groups), filepath))
     trace_group = trace_groups[0]
     symbol_stream = []  # has to be consistent with segmentation
+    baseline_parsed = {}
     for tg in trace_group.findall('{http://www.w3.org/2003/InkML}traceGroup'):
         annotations = tg.findall('{http://www.w3.org/2003/InkML}annotation')
         # anno_xml = tg.findall('{http://www.w3.org/2003/InkML}annotationXML')
@@ -172,15 +148,6 @@ def read(folder, filepath, short_filename, directory):
                              (len(annotations), filepath))
 
         value = annotations[0].text
-        '''
-        db_id = formula_to_dbid(normalize_symbol_name(annotations[0].text))
-        symbol_stream.append(db_id)
-        '''
-
-        '''
-        Need some sort of mapping from symbol to strokes
-        '''
-
         trace_views = tg.findall('{http://www.w3.org/2003/InkML}traceView')
         symbol = []
         trace_ids = []
@@ -188,8 +155,12 @@ def read(folder, filepath, short_filename, directory):
             trace_ids += [int(traceView.attrib['traceDataRef'])]
             symbol.append(int(traceView.attrib['traceDataRef']))
 
+        trace_ids = sorted(trace_ids)
+        baseline_parsed[tuple(trace_ids)] = value
         hw.mapping[value] += [tuple(trace_ids)]
         segmentation.append(symbol)
+
+    hw.baseline_parsed = baseline_parsed
     hw.symbol_stream = symbol_stream
     hw.segmentation = segmentation
     _flat_seg = [stroke2 for symbol2 in segmentation for stroke2 in symbol2]
@@ -212,280 +183,131 @@ def read(folder, filepath, short_filename, directory):
     return hw
 
 
-def read_folder(folder, start, end):
-    global TRAINING_X
-    global TRAINING_Y
-
-    """
-    Parameters
-    ----------
-    folder : string
-        Path to a folde with *.inkml files.
-
-    Returns
-    -------
-    list :
-        Objects of the type HandwrittenData
-    """
-    import glob
+def read_equations(folder,start,end):
     recordings = []
-
-    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays_directory_"+str(start)+"/"
-    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth_directory_"+str(start)+".txt"
-    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model_directory_"+str(start)+".pickle"
+    parse_error = 0
+    total_num_files = 0
     for directory in folder[start:end]:
         filenames = os.listdir(folder[0] + directory)
-        error = 0
-       # print "FILENAMES: {}".format(filenames)
-        for i, filename in enumerate(filenames):  # natsorted(glob.glob("%s/*.inkml" % folder)):
+        invalid_inputs = 0
+        for i, filename in enumerate(filenames):
 
-            # filename = "formulaire001-equation003.inkml"
             filename_copy = filename
             filename = folder[0] + directory + filename
             # print filename
 
             hw = read(folder, filename, filename_copy, directory)
-	   # print hw.formula_in_latex
             if hw == None:
-                error += 1
+                invalid_inputs += 1
                 continue
             if hw.formula_in_latex is not None:
                 hw.formula_in_latex = hw.formula_in_latex.strip()
-            #if hw.formula_in_latex is None or \
-            #    not hw.formula_in_latex.startswith('$') or \
-            #    not hw.formula_in_latex.endswith('$'):
-            #    continue
-            '''
-            if hw.formula_in_latex is not None:
-                logging.info("Starts with: %s",
-                             str(hw.formula_in_latex.startswith('$')))
-                logging.info("ends with: %s",
-                             str(hw.formula_in_latex.endswith('$')))
-            logging.info(hw.formula_in_latex)
-            logging.info(hw.segmentation)
-            hw.show()
-            '''
+            else:
+                continue
 
-            print hw.formula_in_latex
+            baseline_parsing = ""
+            sorted_tuples = sorted(hw.baseline_parsed)
+            for key in sorted_tuples:
+                baseline_parsing += hw.baseline_parsed[key]
+
+            perfect_parsing = "".join(hw.formula_in_latex.split())
+            if perfect_parsing[0] == '$':
+                baseline_parsing = "$" + baseline_parsing + "$"
+
+            if perfect_parsing != baseline_parsing:
+                parse_error += 1
             recordings.append(hw)
-            # break
+            total_num_files += 1
+        
 
-        print "Out of {} files, {} were not parsed properly. ".format(len(filenames), error)
+	print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
 
+        print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
+
+    return recordings
+
+#def read_from_storage(folder, start, end):
+#    TRAINING_X, TRAINING_Y = load_info(folder[0], start, end)
+#    svm_train(TRAINING_X, TRAINING_Y)
+
+
+def svm_train(TRAINING_X, TRAINING_Y):
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(TRAINING_X[index])
+        TEST_Y.append(TRAINING_Y[index])
+
+    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    X = TRAINING_X
+
+    y_map = {}
+    counter = 0
+    NEW_TRAINING_Y = []
+    weights = []
+    freq = defaultdict(int)
+   # print TRAINING_Y
+
+    for y in TRAINING_Y:
+        print y, type(y)
+        freq[y] += 1
+        if y in y_map:
+            NEW_TRAINING_Y.append(y_map[y])
+            continue
+
+        NEW_TRAINING_Y.append(counter)
+        y_map[y] = counter
+        counter += 1
+
+    for y in TRAINING_Y:
+        weights.append(1.0 / freq[y])
+
+    Y = NEW_TRAINING_Y
+
+   #  print len(X), len(Y)
+   # for example, y in zip(X, Y):
+   #     print len(example), y
+
+    clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
+    clf.fit(X, Y, weights)
+
+    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    clf.decision_function_shape = "ovr"
+    error = 0
+
+    for i in range(len(TEST_X)):
+        dec = clf.decision_function([TEST_X[i]])
+        print "Dec: {}".format(dec)
+        print "Max: {}".format(max(dec[0]))
+        max_index = np.argmax(dec[0])
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TEST_Y[i]:
+                    error += 1
+
+    print "ACCURACY: SVM error: {}".format(1.0*error/len(TEST_Y))
+    return clf
+
+
+def read_folder(folder, start, end):
+    recordings = read_equations(folder, start, end)
     TRAINING_Y = []
     TRAINING_X = []
 
     for index, hw in enumerate(recordings):
         x, y = hw.get_training_example()
-	print "Done with one equation: #{}".format(index)
+        for i, np_array in enumerate(x):
+            x[i] = list(itertools.chain.from_iterable(np_array))
+
         TRAINING_X += x
         TRAINING_Y += y
 
-    TEST_X = []
-    TEST_Y = []
-    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
-    for index in test_indices:
-        TEST_X.append(TRAINING_X[index])
-        TEST_Y.append(TRAINING_Y[index])
-
-    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
-    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
-
-    print "Done"
-    X = TRAINING_X
-
-    y_map = {}
-    counter = 0
-    NEW_TRAINING_Y = []
-    weights = []
-    freq = defaultdict(int)
-    for y in TRAINING_Y:
-        freq[y] += 1
-        if y in y_map:
-            NEW_TRAINING_Y.append(y_map[y])
-            continue
-
-        NEW_TRAINING_Y.append(counter)
-        y_map[y] = counter
-        counter += 1
-
-    for y in TRAINING_Y:
-        weights.append(1.0 / freq[y])
-
-    Y = NEW_TRAINING_Y
-
-    for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
-        print len(example), y, new_y
-
-    '''
-    x_test = X
-    y_test = Y
-
-    def svm_auc(logC, logGamma):
-        model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
-        decision_values = model.decision_function(x_test)
-        return optunity.metrics.roc_auc(y_test, decision_values)
-
-    '''
-
-    clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
-    clf.fit(X, Y, weights)
-
-    with open(SVM_MODEL_FILE, "w") as fp:
-        pickle.dump(clf, fp)
-
-    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
-    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
-    clf.decision_function_shape = "ovr"
-    error = 0
-
-    for i in range(len(TEST_X)):
-        dec = clf.decision_function([TEST_X[i]])
-        print "Dec: {}".format(dec)
-        print "Max: {}".format(max(dec[0]))
-        max_index = np.argmax(dec[0])
-        for symbol, index in y_map.iteritems():
-            if index == max_index:
-                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
-                if symbol != TEST_Y[i]:
-                    error += 1
-
-        '''
-        data = np.reshape(X[i], (480,640))
-        pl.imshow(data)
-        pl.savefig("results/Result_{}".format(i))
-        '''
-
-    print "error: {}".format(1.0 * error / len(TEST_Y))
-    '''
-    latex_truth = []
-    for hw in recordings:
-        x,y =  hw.get_training_example()
-        filename = X_NP_FOLDER + hw.filename[:hw.filename.index('.')] + ".pickle"
-        with open(filename, "w") as fp:  # Pickling
-            pickle.dump(x, fp)
-
-        latex_truth += y
-
-    with open(LATEX_TRUTH_FILE, "w") as fp:
-        pickle.dump(latex_truth, fp)
-
-    print "Done with saving to file: Saved: {} training examples.".format(len(recordings))
-    '''
-
-def svm_train_test(start,end):
-    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays_directory_"+str(start)+"/"
-    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth_directory_"+str(start)+".txt"
-    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model_directory_"+str(start)+".pickle"
-    with open(SVM_MODEL_FILE, "r") as fp:
-	clf = pickle.load(fp)
-
-    print type(clf)
-    TRAINING_Y = []
-    TRAINING_X = []
-
-    with open(LATEX_TRUTH_FILE, "rb") as fp:
-        TRAINING_Y = pickle.load(fp)
-
-    x_files = os.listdir(X_NP_FOLDER)
-    for x_file in x_files:
-        x_file = X_NP_FOLDER + x_file
-        with open(x_file, "rb") as fp:
-            TRAINING_X += pickle.load(fp)
-
-    for x,y in zip(TRAINING_X, TRAINING_Y):
-	print "x:{},  y: {}".format(x,y)
-
-def svm_train():
-    X_NP_FOLDER = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_np_arrays/"
-    LATEX_TRUTH_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/saved_latex_truth.txt"
-    SVM_MODEL_FILE = "/afs/.ir/users/n/b/nborus/latex_project/latex-project/shared_hwrt_code/datasets/svm_model.pickle"
-    TRAINING_Y = []
-    TRAINING_X = []
-
-    with open(LATEX_TRUTH_FILE, "rb") as fp:
-        TRAINING_Y = pickle.load(fp)
-
-    x_files = os.listdir(X_NP_FOLDER)
-    for x_file in x_files:
-        x_file = X_NP_FOLDER + x_file
-        with open(x_file, "rb") as fp:
-            TRAINING_X += pickle.load(fp)
-
-    TEST_X = []
-    TEST_Y = []
-    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
-    for index in test_indices:
-        TEST_X.append(TRAINING_X[index])
-        TEST_Y.append(TRAINING_Y[index])
-
-    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
-    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
-
-    print "Done"
-    X = TRAINING_X
-
-    y_map = {}
-    counter = 0
-    NEW_TRAINING_Y = []
-    weights = []
-    freq = defaultdict(int)
-    for y in TRAINING_Y:
-        freq[y] += 1
-        if y in y_map:
-            NEW_TRAINING_Y.append(y_map[y])
-            continue
-
-        NEW_TRAINING_Y.append(counter)
-        y_map[y] = counter
-        counter += 1
-
-    for y in TRAINING_Y:
-        weights.append(1.0 / freq[y])
-
-    Y = NEW_TRAINING_Y
-
-    for example, y, new_y in zip(TRAINING_X, TRAINING_Y, NEW_TRAINING_Y):
-        print len(example), y, new_y
-
-    '''
-    x_test = X
-    y_test = Y
-
-    def svm_auc(logC, logGamma):
-        model = svm.SVC(C=10 ** logC, gamma=10 ** logGamma).fit(X, Y)
-        decision_values = model.decision_function(x_test)
-        return optunity.metrics.roc_auc(y_test, decision_values)
-
-    '''
-
-    clf = svm.SVC(decision_function_shape='ovo', gamma=0.100, C=1000.0)
-    clf.fit(X, Y, weights)
-
-    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
-    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
-    clf.decision_function_shape = "ovr"
-    error = 0
-
-    for i in range(len(TEST_X)):
-        dec = clf.decision_function([TEST_X[i]])
-        print "Dec: {}".format(dec)
-        print "Max: {}".format(max(dec[0]))
-        max_index = np.argmax(dec[0])
-        for symbol, index in y_map.iteritems():
-            if index == max_index:
-                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
-                if symbol != TEST_Y[i]:
-                    error += 1
-
-        '''
-        data = np.reshape(X[i], (480,640))
-        pl.imshow(data)
-        pl.savefig("results/Result_{}".format(i))
-        '''
-
-    print "error: {}".format(1.0 * error / len(TEST_Y))
-
+    svm_train(TRAINING_X, TRAINING_Y)
 
 def main(folder,start,end):
     """
@@ -493,7 +315,7 @@ def main(folder,start,end):
 
     Parameters
     ----------
-    folder : str
+    folder : list of str
     """
 
     logging.info(folder)
@@ -521,7 +343,6 @@ if __name__ == '__main__':
     start = int(myargs['-s'])
     end = int(myargs['-e'])
     signal.signal(signal.SIGINT, handler)
-    folder = ["/afs/.ir/users/n/b/nborus/latex_project/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
+    folder = ["/Users/norahborus/Documents/latex-project/baseline/training_data/", "CHROME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
     main(folder, start, end)
-   # svm_train_test(start,end)
 
