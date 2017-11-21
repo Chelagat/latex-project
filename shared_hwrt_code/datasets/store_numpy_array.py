@@ -1,5 +1,5 @@
 from inkml import read_equations
-import pickle
+import cPickle
 import os
 import json
 from ast import literal_eval
@@ -43,8 +43,9 @@ def store_info(path, folders, start,end):
 
 
         filename = storage_directory + hw.filename
+
         with open(filename, "w") as fp:
-            json.dump(rep, fp)
+            cPickle.dump(rep, fp)
 
     '''
     storage_directory_svm = storage_directory + "svm/"
@@ -70,8 +71,7 @@ def load_info(path, folder):
     for equation_file in equation_files:
         equation_file = storage_directory + equation_file
         with open(equation_file, 'rb') as fp:
-            data = fp.read()
-            rep = json.loads(data)
+            rep = cPickle.load(fp)
 
         symbols = rep['symbol']
         for symbol in symbols:

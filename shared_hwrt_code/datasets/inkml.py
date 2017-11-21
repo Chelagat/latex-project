@@ -191,7 +191,8 @@ def read_equations(folder,start,end):
         filenames = os.listdir(folder[0] + directory)
         invalid_inputs = 0
         for i, filename in enumerate(filenames):
-
+            if "inkml" not in filename:
+                continue
             filename_copy = filename
             filename = folder[0] + directory + filename
             # print filename
