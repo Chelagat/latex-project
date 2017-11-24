@@ -17,6 +17,7 @@ import datetime
 logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.DEBUG,
                     stream=sys.stdout)
+from scipy.sparse import csr_matrix
 
 import random
 from xml.dom.minidom import parseString
@@ -187,6 +188,7 @@ def read_equations(folder,start,end):
     recordings = []
     parse_error = 0
     total_num_files = 0
+    count = 0
     for directory in folder[start:end]:
         filenames = os.listdir(folder[0] + directory)
         invalid_inputs = 0
@@ -217,13 +219,16 @@ def read_equations(folder,start,end):
 
             if perfect_parsing != baseline_parsing:
                 parse_error += 1
+
+            count += 1
+            print "#{} --> done".format(count)
             recordings.append(hw)
             total_num_files += 1
         
 
-	print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
+    print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
 
-        print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
+    print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
 
     return recordings
 
@@ -231,16 +236,177 @@ def read_equations(folder,start,end):
 #    TRAINING_X, TRAINING_Y = load_info(folder[0], start, end)
 #    svm_train(TRAINING_X, TRAINING_Y)
 
+def pre_process(x_map,rows,cols):
+    np_array = np.zeros((rows, cols))
+    for row in xrange(rows):
+        for col in xrange(cols):
+            if str((row, col)) in np_array_map:
+                np_array[row][col] = x_map[str((row, col))]
+
+    return np_array
+
+def validation(TRAINING_X,TRAINING_Y):
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(((TRAINING_X[index]).toarray()).flatten())
+        TEST_Y.append(TRAINING_Y[index])
+
+    X = [(val.toarray()).flatten() for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    test_data_np_array = np.array(TEST_X)
+    sparse_test_data = csr_matrix(test_data_np_array)
+
+    training_data_np_array = np.array(X)
+    sparse_training_data = csr_matrix(training_data_np_array)
+
+    print "About to start fitting"
+ #   print len(X), len(TEST_X)
+
+    return sparse_training_data, Y, sparse_test_data, TEST_Y
+
+def sparse_svm_linear_train(TRAINING_X, TRAINING_Y):
+    print "************"
+   # sparse_training_data, TRAINING_Y, sparse_test_data, TEST_Y = validation(TRAINING_X, INPUT_Y)
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(((TRAINING_X[index]).toarray()).flatten())
+        TEST_Y.append(TRAINING_Y[index])
+
+    X = [(val.toarray()).flatten() for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TEMP_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    test_data_np_array = np.array(TEST_X)
+    sparse_test_data = csr_matrix(test_data_np_array)
+
+    training_data_np_array = np.array(X)
+    sparse_training_data = csr_matrix(training_data_np_array)
+
+
+    y_map = {}
+    counter = 0
+    NEW_TRAINING_Y = []
+    weights = []
+    freq = defaultdict(int)
+   # print TRAINING_Y
+
+    for y in TEMP_Y:
+        #print y, type(y)
+        freq[y] += 1
+        if y in y_map:
+            NEW_TRAINING_Y.append(y_map[y])
+            continue
+
+        NEW_TRAINING_Y.append(counter)
+        y_map[y] = counter
+        counter += 1
+
+    for y in TEMP_Y:
+        weights.append(1.0 / freq[y])
+
+    Y = NEW_TRAINING_Y
+
+    print "About to start fitting"
+    print "***AFTER*****"
+
+    clf = svm.LinearSVC(multi_class='ovr', C=50.0)
+    clf.fit(sparse_training_data, Y, weights)
+
+    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    error = 0
+    decisions = clf.decision_function(sparse_test_data)
+    print len(decisions)
+    for i, dec in enumerate(decisions):
+       # print "Type dec: {}, Dec: {}".format(type(dec), dec)
+       # print "Max: {}".format(max(dec))
+        max_index = np.argmax(dec)
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TEST_Y[i]:
+                    error += 1
+
+    print "ACCURACY: SVM error: {}".format(1.0*error/len(TEST_Y))
+    return clf
+
+def svm_linear_train(TRAINING_X, TRAINING_Y):
+    TEST_X = []
+    TEST_Y = []
+    test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
+    for index in test_indices:
+        TEST_X.append(((TRAINING_X[index]).toarray()).flatten())
+        TEST_Y.append(TRAINING_Y[index])
+
+    TRAINING_X = [(val.toarray()).flatten() for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
+
+    X = TRAINING_X
+
+    y_map = {}
+    counter = 0
+    NEW_TRAINING_Y = []
+    weights = []
+    freq = defaultdict(int)
+   # print TRAINING_Y
+
+    for y in TRAINING_Y:
+        #print y, type(y)
+        freq[y] += 1
+        if y in y_map:
+            NEW_TRAINING_Y.append(y_map[y])
+            continue
+
+        NEW_TRAINING_Y.append(counter)
+        y_map[y] = counter
+        counter += 1
+
+    for y in TRAINING_Y:
+        weights.append(1.0 / freq[y])
+
+    Y = NEW_TRAINING_Y
+
+   #  print len(X), len(Y)
+   # for example, y in zip(X, Y):
+   #     print len(example), y
+    print "About to start fitting"
+    print len(X)
+
+
+    clf = svm.LinearSVC(multi_class='ovr', C=50.0)
+    clf.fit(X, Y, weights)
+
+    # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
+    # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
+    error = 0
+
+    for i in range(len(TEST_X)):
+        dec = clf.decision_function([TEST_X[i]])
+        print "Dec: {}".format(dec)
+        print "Max: {}".format(max(dec[0]))
+        max_index = np.argmax(dec[0])
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TEST_Y[i]:
+                    error += 1
+
+    print "ACCURACY: SVM error: {}".format(1.0*error/len(TEST_Y))
+    return clf
 
 def svm_train(TRAINING_X, TRAINING_Y):
     TEST_X = []
     TEST_Y = []
     test_indices = random.sample(range(len(TRAINING_X)), len(TRAINING_X) / 10)
     for index in test_indices:
-        TEST_X.append(TRAINING_X[index])
+        TEST_X.append(((TRAINING_X[index]).toarray()).flatten())
         TEST_Y.append(TRAINING_Y[index])
 
-    TRAINING_X = [val for i, val in enumerate(TRAINING_X) if i not in test_indices]
+    TRAINING_X = [(val.toarray()).flatten() for i, val in enumerate(TRAINING_X) if i not in test_indices]
     TRAINING_Y = [val for i, val in enumerate(TRAINING_Y) if i not in test_indices]
 
     X = TRAINING_X
@@ -271,6 +437,9 @@ def svm_train(TRAINING_X, TRAINING_Y):
    #  print len(X), len(Y)
    # for example, y in zip(X, Y):
    #     print len(example), y
+    print "About to start fitting"
+    print len(X)
+
 
     clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
     clf.fit(X, Y, weights)

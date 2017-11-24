@@ -7,8 +7,6 @@ from ast import literal_eval
 import numpy as np
 import itertools
 from inkml import svm_train
-from inkml import svm_linear_train
-from inkml import sparse_svm_linear_train
 import threading
 from multiprocessing import Pool
 import datetime
@@ -16,37 +14,7 @@ import cPickle
 from inkml import read_equations
 import gc
 import marshal
-from scipy.sparse import csr_matrix
-import scipy.sparse
-
-from itertools import chain
-from sklearn import svm
-import json
-import signal
-import sys
-import logging
-import matplotlib
-from sys import argv
-matplotlib.use("Agg")
-import itertools
-#from store_numpy_array import load_info
-from collections import defaultdict
-import datetime
-logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
-                    level=logging.DEBUG,
-                    stream=sys.stdout)
-from scipy.sparse import csr_matrix
-
-import random
-from xml.dom.minidom import parseString
-
-# hwrt modules
-import os, sys
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import handwritten_data
-
-
+import ujson
 
 def store_info(path, folders, start, end):
     '''
@@ -54,7 +22,7 @@ def store_info(path, folders, start, end):
     '''
     # Idea: store sparse dictionary
     hw_objects = read_equations(folders, start, end)
-    storage_directory = path + str(start) + str(end) + '/'
+    storage_directory = path + 'ujson_'+ str(start) + str(end) + '/'
 
     if not os.path.exists(storage_directory):
         os.makedirs(storage_directory)
@@ -84,7 +52,7 @@ def store_info(path, folders, start, end):
         filename = storage_directory + hw.filename
 
         with open(filename, "w") as fp:
-            cPickle.dump(rep, fp)
+            ujson.dump(rep, fp)
 
     '''
     storage_directory_svm = storage_directory + "svm/"
@@ -106,7 +74,7 @@ def load_info(equation_file):
     TRAINING_X = []
     TRAINING_Y = []
     with open(equation_file, 'rb') as fp:
-        rep = cPickle.load(fp)
+        rep = ujson.load(fp)
 
     symbols = rep['symbol']
     for symbol in symbols:
@@ -134,7 +102,7 @@ def load_info_v2(equation_file):
 
 
     with open(equation_file, 'rb') as fp:
-        rep = cPickle.load(fp)
+        rep = ujson.load(fp)
 
     symbols = rep['symbol']
     for symbol in symbols:
@@ -143,16 +111,18 @@ def load_info_v2(equation_file):
         np_array_map = symbol[1]
         rows,cols = rep['num_rows'], rep['num_cols']
         np_array = np.zeros((rows,cols))
+        print np_array_map
         for row in xrange(rows):
             for col in xrange(cols):
-                if str((row,col)) in np_array_map:
-                    np_array[row][col] = np_array_map[str((row,col))]
 
-        sparse_matrix = csr_matrix(np_array)
-       # print sparse_matrix.shape
+                if str((row,col)) in np_array_map:
+                    print row, col, np_array_map[str((row,col))]
+                    np_array[int(row)][int(col)] = np_array_map[str((row,col))]
+
+
         #plt.imshow(np_array,cmap='gray')
         #plt.savefig("results/{}".format(symbol[0]))
-        TRAINING_X.append(sparse_matrix)
+        TRAINING_X.append(list(itertools.chain.from_iterable(np_array)))
 
     #print "Done with read"
     return TRAINING_X, TRAINING_Y
@@ -180,15 +150,12 @@ def read_files_thread(path):
     print "TOTAL TIME TAKEN: {}".format(time_taken)
     print len(results)
 
-def add_to_test_set():
-    return random.random() < 0.1
-
 def read_files_sequence(first_path, path):
 
     print path
     filenames = os.listdir(path)
     print filenames
-    filenames = [path+file for file in filenames[:2000]]
+    filenames = [path+file for file in filenames]
     data = []
     start = datetime.datetime.now()
     bucket_0 = []
@@ -202,13 +169,10 @@ def read_files_sequence(first_path, path):
     bucket_8 = []
     bucket_9 = []
 
-    test_data = []
     gc.disable()
     for index, file in enumerate(filenames):
         print "Done --> {}".format(index)
-        if add_to_test_set():
-            test_data.append(load_info_v2(file))
-        elif index % 10 == 0:
+        if index % 10 == 0:
             bucket_0.append(load_info_v2(file))
 
         elif index % 10 == 1:
@@ -244,39 +208,19 @@ def read_files_sequence(first_path, path):
     data += bucket_9
 
 
-   # print len(data)
+    print len(data)
     TRAINING_X = []
     TRAINING_Y = []
     for x,y in data:
         TRAINING_X += x
         TRAINING_Y += y
 
-    TEST_X = []
-    TEST_Y = []
-
-    for x,y in test_data:
-        TEST_X += x
-        TEST_Y += y
-
-    print len(TRAINING_Y), len(TEST_Y)
-
-    sparse_training_data = csr_matrix((np.fromiter(
-        chain.from_iterable([(val.toarray()).flatten() for i, val in enumerate(TRAINING_X)]),np.float)).reshape(
-        len(TRAINING_Y), 307200))
-    print "X"
-
-    sparse_test_data = csr_matrix((np.fromiter(
-        chain.from_iterable([(val.toarray()).flatten() for i, val in enumerate(TEST_X)]), np.float)).reshape(
-        len(TEST_Y), 307200))
-
-
-    print "Done creating test & converting to sparse"
     end = datetime.datetime.now()
     time_taken = (end-start).total_seconds()
     print "TOTAL TIME TAKEN: {}".format(time_taken)
 
-
-    return sparse_training_data, TRAINING_Y, sparse_test_data, TEST_Y
+    print TRAINING_X[0], TRAINING_Y[0]
+    return TRAINING_X, TRAINING_Y
 
 
 
@@ -287,7 +231,7 @@ def read_files_sequence(first_path, path):
 def read_pickle(file):
     TRAINING_DATA = []
     with open(file, 'rb') as fp:
-        TRAINING_DATA = cPickle.load(fp)
+        TRAINING_DATA = ujson.load(fp)
 
     TRAINING_X = []
     TRAINING_Y = []
@@ -320,7 +264,7 @@ def read_files(path):
     print "TOTAL TIME TAKEN: {}".format(time_taken)
     store = path + '12_dump'
     with open(store, 'w') as fp:
-        cPickle.dump(data, fp)
+        ujson.dump(data, fp)
 
    # print len(data), type(data[0])
    # print data[0]
@@ -329,50 +273,20 @@ def read_files(path):
 
 def main():
     path = '/Users/norahborus/Documents/DATA/training_data/'
-    training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
-   # store_info(path, training_folders, 2, 3)
+    training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_training_2011/", "TrainINKML_2013_JSON/", "trainData_2012_part1_JSON/", "trainData_2012_part2_JSON/"]
+    store_info(path, training_folders, 1, 2)
    # print "*************SEQUENCE*****************"
-    sparse_training_data, TRAINING_Y, sparse_test_data, TEST_Y = read_files_sequence(path, path + "23/")
-    y_map = {}
-    counter = 0
-    NEW_TRAINING_Y = []
-    weights = []
-    freq = defaultdict(int)
+   # X,Y = read_files_sequence(path, path + "json_12/")
+    print "***************NOW TO TRAIN*********************"
+    svm_train(X, Y)
+  #  X, Y  = read_pickle("/Users/norahborus/Documents/DATA/12_dump.txt")
+  #  print "***************************************"
+   # print "***************THREADS******************"
+  #  read_files_thread(path + "12/")
 
-    print "Ordering TRAINING_Y:"
-    for y in TRAINING_Y:
-        freq[y] += 1
-        if y in y_map:
-            NEW_TRAINING_Y.append(y_map[y])
-            continue
-        NEW_TRAINING_Y.append(counter)
-        y_map[y] = counter
-        counter += 1
 
-    for y in TRAINING_Y:
-        weights.append(1.0 / freq[y])
 
-    Y = NEW_TRAINING_Y
-
-    print "About to start fitting"
-    clf = svm.LinearSVC(multi_class='ovr', C=50.0)
-    clf.fit(sparse_training_data, Y, weights)
-    print "***AFTER*****"
-    error = 0
-    decisions = clf.decision_function(sparse_test_data)
-    print len(decisions)
-    for i, dec in enumerate(decisions):
-        max_index = np.argmax(dec)
-        for symbol, index in y_map.iteritems():
-            if index == max_index:
-                print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
-                if symbol != TEST_Y[i]:
-                    error += 1
-
-    print "ACCURACY: SVM error: {}".format(1.0 * error / len(TEST_Y))
-    return clf
 
 
 if __name__ == '__main__':
-    random.seed(10)
     main()
