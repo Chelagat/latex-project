@@ -24,7 +24,7 @@ from xml.dom.minidom import parseString
 
 # hwrt modules
 import os, sys
-
+from sklearn import linear_model
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import handwritten_data
 
