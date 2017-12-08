@@ -24,7 +24,7 @@ class HandwrittenData(object):
     """Represents a handwritten symbol."""
     def __init__(self, raw_data_json, filename=None,filepath=None, formula_id=None, raw_data_id=None,
                  formula_in_latex=None, wild_point_count=0,
-                 missing_stroke=0, user_id=0, user_name='', segmentation=None, baseline_parsed=None):
+                 missing_stroke=0, user_id=0, user_name='', strokes=None , segmentation=None, baseline_parsed=None):
         self.mapping = defaultdict(list)
         self.filepath = filepath
         self.inv_mapping = defaultdict(list)
@@ -32,6 +32,7 @@ class HandwrittenData(object):
         self.formula_id = formula_id
         self.filename = filename
         self.raw_data_id = raw_data_id
+        self.strokes = strokes
         self.baseline_parsed = None
         self.formula_in_latex = formula_in_latex
         self.wild_point_count = wild_point_count
@@ -370,7 +371,9 @@ class HandwrittenData(object):
             return image
         return image.crop(bbox)
 
-    def get_training_example(self):
+
+
+    def get_training_example_without_hog(self):
         """Show the data graphically in a new pop-up window."""
 
         # prevent the following error:
@@ -382,7 +385,8 @@ class HandwrittenData(object):
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-
+        plt.rcParams['axes.facecolor'] = 'red'
+        from scipy.ndimage.filters import gaussian_filter
         x, y = [], []
 
         pointlist = self.get_pointlist()
@@ -415,9 +419,11 @@ class HandwrittenData(object):
         colors = _get_colors(self.segmentation)
         fig = plt.figure()
         for symbols, color_1 in zip(self.segmentation, colors):
-            symbol_str = self.inv_mapping[tuple(symbols)]
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
             plt.clf()
             ax = fig.add_subplot(111)
+          #  fig.set_size_inches([124.0 / 192, 93.0 / 192])
+          #  fig.set_size_inches([62.0 / 192, 62.0 / 192])
             for stroke_index in symbols:
                 stroke = pointlist[stroke_index]
                 xs, ys = [], []
@@ -431,8 +437,102 @@ class HandwrittenData(object):
             plt.gca().invert_yaxis()
             ax.set_aspect('equal')
             plt.axis('off')
+
             fig.canvas.draw()
-            # fig.savefig("test_fig.png")
+           # fig.savefig("results/"+symbol_str+".png",facecolor=ax.get_facecolor())
+          #  np.set_printoptions(threshold=np.nan)
+            # Now we can save it to a numpy array.
+            #   non_grey = []
+            data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+            # print data
+            # print fig.canvas.get_width_height()
+            # print data.shape
+            data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
+           # print data.shape
+
+            data_dict = defaultdict(int)
+            new_data = np.zeros(data.shape)
+            flipped_data = np.zeros(data.shape)
+            for row in range(len(data)):
+                for col in range(len(data[0])):
+                    point = data[row][col]
+                    if point != 255:
+                        new_data[row][col] = 1
+                        data_dict[(row, col)] = 1
+
+            x.append(new_data)
+            y.append(symbol_str)
+
+        return x,y
+
+    def get_training_example(self):
+        """Show the data graphically in a new pop-up window."""
+
+        # prevent the following error:
+        # '_tkinter.TclError: no display name and no $DISPLAY environment
+        #    variable'
+        # import matplotlib
+        # matplotlib.use('GTK3Agg', warn=False)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.rcParams['axes.facecolor'] = 'red'
+        from scipy.ndimage.filters import gaussian_filter
+        x, y = [], []
+
+        pointlist = self.get_pointlist()
+        if 'pen_down' in pointlist[0][0]:
+            assert len(pointlist) > 1, \
+                "Lenght of pointlist was %i. Got: %s" % (len(pointlist),
+                                                         pointlist)
+            # Create a new pointlist that models pen-down strokes and pen
+            # up strokes
+            new_pointlist = []
+            last_pendown_state = None
+            stroke = []
+            for point in pointlist[0]:
+                if last_pendown_state is None:
+                    last_pendown_state = point['pen_down']
+                if point['pen_down'] != last_pendown_state:
+                    new_pointlist.append(stroke)
+                    last_pendown_state = point['pen_down']
+                    stroke = []
+                else:
+                    stroke.append(point)
+            new_pointlist.append(stroke)  # add the last stroke
+            pointlist = new_pointlist
+
+        _, ax = plt.subplots()
+        ax.set_title("Raw data id: %s, "
+                     "Formula_id: %s" % (str(self.raw_data_id),
+                                         str(self.formula_id)))
+
+        colors = _get_colors(self.segmentation)
+        fig = plt.figure()
+        for symbols, color_1 in zip(self.segmentation, colors):
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
+            plt.clf()
+            ax = fig.add_subplot(111)
+          #  fig.set_size_inches([124.0 / 192, 93.0 / 192])
+          #  fig.set_size_inches([62.0 / 192, 62.0 / 192])
+            for stroke_index in symbols:
+                stroke = pointlist[stroke_index]
+                xs, ys = [], []
+                for p in stroke:
+                    xs.append(p['x'])
+                    ys.append(p['y'])
+                    ax.plot(xs, ys, color="#000000")
+
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first...
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.axis('off')
+
+            fig.canvas.draw()
+           # fig.savefig("results/"+symbol_str+".png",facecolor=ax.get_facecolor())
           #  np.set_printoptions(threshold=np.nan)
             # Now we can save it to a numpy array.
             #   non_grey = []
@@ -442,10 +542,9 @@ class HandwrittenData(object):
             # print data.shape
             data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
-            '''
-            data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
-
+          #  data = np.dot(data[..., :3], [0.299, 0.587, 0.114])
            # print data.shape
+            '''
             data_dict = defaultdict(int)
             new_data = np.zeros(data.shape)
             flipped_data = np.zeros(data.shape)
@@ -463,9 +562,254 @@ class HandwrittenData(object):
                         data_dict[(row, col)] = 1
 
             '''
+
+          #  blurred = gaussian_filter(new_data, sigma=7)
+           # im = Image.fromarray(blurred * 255)
+           # im.show()
+           # print new_data.shape
+           # im = Image.fromarray(new_data*255)
+           # im.show()
            # new_data = new_data[:, 100:-100]
           #  flipped_data = flipped_data[:,100:-100]
           #  plt.savefig("results/"+symbol_str)
+            image = color.rgb2gray(data)
+
+            fd, hog_image = hog(image, orientations=8, pixels_per_cell=(32, 32),
+                                cells_per_block=(1, 1), visualise=True)
+
+            # Rescale histogram for better display
+            hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 0.02))
+            hog_np_array = np.asarray(hog_image_rescaled)
+          #  plt.imshow(hog_image_rescaled, cmap=plt.cm.gray)
+          #  plt.show()
+          #  plt.savefig("hog_image_{}.png".format(symbol_str))
+            x.append(hog_np_array)
+            y.append(symbol_str)
+
+        return x,y
+    #    plt.show()
+
+
+    def get_training_example_v3(self, dir):
+        """Show the data graphically in a new pop-up window."""
+
+        # prevent the following error:
+        # '_tkinter.TclError: no display name and no $DISPLAY environment
+        #    variable'
+        # import matplotlib
+        # matplotlib.use('GTK3Agg', warn=False)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.rcParams['axes.facecolor'] = 'red'
+        x, y = [], []
+
+        pointlist = self.get_pointlist()
+        if 'pen_down' in pointlist[0][0]:
+            assert len(pointlist) > 1, \
+                "Lenght of pointlist was %i. Got: %s" % (len(pointlist),
+                                                         pointlist)
+            # Create a new pointlist that models pen-down strokes and pen
+            # up strokes
+            new_pointlist = []
+            last_pendown_state = None
+            stroke = []
+            for point in pointlist[0]:
+                if last_pendown_state is None:
+                    last_pendown_state = point['pen_down']
+                if point['pen_down'] != last_pendown_state:
+                    new_pointlist.append(stroke)
+                    last_pendown_state = point['pen_down']
+                    stroke = []
+                else:
+                    stroke.append(point)
+            new_pointlist.append(stroke)  # add the last stroke
+            pointlist = new_pointlist
+
+        _, ax = plt.subplots()
+        ax.set_title("Raw data id: %s, "
+                     "Formula_id: %s" % (str(self.raw_data_id),
+                                         str(self.formula_id)))
+
+        colors = _get_colors(self.segmentation)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, axisbg='black')
+        for symbols, color_1 in zip(self.segmentation, colors):
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
+          #  plt.clf()
+            ax.set_facecolor('black')
+            for stroke_index in symbols:
+                stroke = pointlist[stroke_index]
+                xs, ys = [], []
+                for p in stroke:
+                    xs.append(p['x'])
+                    ys.append(p['y'])
+                    ax.plot(xs, ys, color="#ffffff")
+
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first...
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.axis('off')
+
+       # fig.set_size_inches([620.0 / 192, 62.0 / 192])
+        fig.canvas.draw()
+        filename = dir + self.filename + '.png'
+        fig.savefig(filename,format = 'png', facecolor=ax.get_facecolor())
+        #print hog_np_array.shape
+
+    def get_training_example_v2(self, dir):
+        """Show the data graphically in a new pop-up window."""
+
+        # prevent the following error:
+        # '_tkinter.TclError: no display name and no $DISPLAY environment
+        #    variable'
+        # import matplotlib
+        # matplotlib.use('GTK3Agg', warn=False)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        plt.rcParams['axes.facecolor'] = 'red'
+        x, y = [], []
+
+        pointlist = self.get_pointlist()
+        if 'pen_down' in pointlist[0][0]:
+            assert len(pointlist) > 1, \
+                "Lenght of pointlist was %i. Got: %s" % (len(pointlist),
+                                                         pointlist)
+            # Create a new pointlist that models pen-down strokes and pen
+            # up strokes
+            new_pointlist = []
+            last_pendown_state = None
+            stroke = []
+            for point in pointlist[0]:
+                if last_pendown_state is None:
+                    last_pendown_state = point['pen_down']
+                if point['pen_down'] != last_pendown_state:
+                    new_pointlist.append(stroke)
+                    last_pendown_state = point['pen_down']
+                    stroke = []
+                else:
+                    stroke.append(point)
+            new_pointlist.append(stroke)  # add the last stroke
+            pointlist = new_pointlist
+
+        _, ax = plt.subplots()
+        ax.set_title("Raw data id: %s, "
+                     "Formula_id: %s" % (str(self.raw_data_id),
+                                         str(self.formula_id)))
+
+        colors = _get_colors(self.segmentation)
+        fig = plt.figure()
+        for symbols, color_1 in zip(self.segmentation, colors):
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
+            plt.clf()
+            ax = fig.add_subplot(111, axisbg='black')
+            ax.set_facecolor('black')
+            for stroke_index in symbols:
+                stroke = pointlist[stroke_index]
+                xs, ys = [], []
+                for p in stroke:
+                    xs.append(p['x'])
+                    ys.append(p['y'])
+                    ax.plot(xs, ys, color="#ffffff")
+
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first...
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.axis('off')
+            fig.set_size_inches([62.0/192, 62.0/192])
+            fig.canvas.draw()
+            print symbol_str
+            if symbol_str == '/':
+                symbol_str = 'forward_slash'
+
+            filename = dir + "_"+self.filename+symbol_str +'.png'
+            fig.savefig(filename,format = 'png', facecolor=ax.get_facecolor())
+            #print hog_np_array.shape
+            x.append(filename)
+            y.append(symbol_str)
+
+       # return x,y
+    #    plt.show()
+
+    def get_training_example_v4(self, dir):
+        """Show the data graphically in a new pop-up window."""
+
+        # prevent the following error:
+        # '_tkinter.TclError: no display name and no $DISPLAY environment
+        #    variable'
+        # import matplotlib
+        # matplotlib.use('GTK3Agg', warn=False)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from scipy.ndimage.filters import gaussian_filter
+        x, y = [], []
+
+        pointlist = self.get_pointlist()
+        if 'pen_down' in pointlist[0][0]:
+            assert len(pointlist) > 1, \
+                "Lenght of pointlist was %i. Got: %s" % (len(pointlist),
+                                                         pointlist)
+            # Create a new pointlist that models pen-down strokes and pen
+            # up strokes
+            new_pointlist = []
+            last_pendown_state = None
+            stroke = []
+            for point in pointlist[0]:
+                if last_pendown_state is None:
+                    last_pendown_state = point['pen_down']
+                if point['pen_down'] != last_pendown_state:
+                    new_pointlist.append(stroke)
+                    last_pendown_state = point['pen_down']
+                    stroke = []
+                else:
+                    stroke.append(point)
+            new_pointlist.append(stroke)  # add the last stroke
+            pointlist = new_pointlist
+
+        _, ax = plt.subplots()
+        ax.set_title("Raw data id: %s, "
+                     "Formula_id: %s" % (str(self.raw_data_id),
+                                         str(self.formula_id)))
+
+        colors = _get_colors(self.segmentation)
+        fig = plt.figure()
+        for symbols, color_1 in zip(self.segmentation, colors):
+            symbol_str = self.inv_mapping[tuple(sorted(symbols))]
+            plt.clf()
+            ax = fig.add_subplot(111)
+          #  fig.set_size_inches([62.0 / 192, 62.0 / 192])
+            for stroke_index in symbols:
+                stroke = pointlist[stroke_index]
+                xs, ys = [], []
+                for p in stroke:
+                    xs.append(p['x'])
+                    ys.append(p['y'])
+                    ax.plot(xs, ys, color="#000000")
+
+            # If we haven't already shown or saved the plot, then we need to
+            # draw the figure first...
+            plt.gca().invert_yaxis()
+            ax.set_aspect('equal')
+            plt.axis('off')
+
+            fig.canvas.draw()
+           # fig.savefig("results/"+symbol_str+".png",facecolor=ax.get_facecolor())
+          #  np.set_printoptions(threshold=np.nan)
+            # Now we can save it to a numpy array.
+            #   non_grey = []
+            data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+            plt.clf()
+            # print data
+            # print fig.canvas.get_width_height()
+            # print data.shape
+            data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             image = color.rgb2gray(data)
             fd, hog_image = hog(image, orientations=8, pixels_per_cell=(32, 32),
                                 cells_per_block=(1, 1), visualise=True)
@@ -473,12 +817,17 @@ class HandwrittenData(object):
             # Rescale histogram for better display
             hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 0.02))
             hog_np_array = np.asarray(hog_image_rescaled)
+            print symbol_str
+            if symbol_str == '/':
+                symbol_str = 'forward_slash'
+
+            plt.imshow(hog_np_array, cmap='gray')
+            filename = dir + "_" + self.filename + symbol_str + '.png'
+            plt.savefig(filename,format = 'png', facecolor=ax.get_facecolor())
             #print hog_np_array.shape
-            x.append(hog_np_array)
+            x.append(filename)
             y.append(symbol_str)
 
-        return x,y
-    #    plt.show()
 
     def count_single_dots(self):
         """Count all strokes of this recording that have only a single dot.
