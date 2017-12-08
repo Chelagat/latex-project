@@ -55,7 +55,7 @@ def beautify_xml(path):
     return pretty_print(content)
 
 
-def normalize_symbol_name(symbol_name):
+def normalize_symbl_name(symbol_name):
     """
     Change symbol names to a version which is known by write-math.com
 
@@ -94,11 +94,13 @@ def read(folder, filepath, short_filename, directory):
         return None
     # Get the raw data
     recording = []
+    raw_recording = []
     strokes = sorted(root.findall('{http://www.w3.org/2003/InkML}trace'),
                      key=lambda child: int(child.attrib['id']))
     time = 0
     for stroke in strokes:
         stroke = stroke.text.strip().split(',')
+        raw_recording.append(stroke)
         stroke = [point.strip().split(' ') for point in stroke]
         if len(stroke[0]) == 3:
             stroke = [{'x': float(x), 'y': float(y), 'time': float(t)}
@@ -111,6 +113,8 @@ def read(folder, filepath, short_filename, directory):
                 time += 20
             stroke = new_stroke
             time += 200
+
+
         recording.append(stroke)
 
     # Get LaTeX
@@ -119,7 +123,7 @@ def read(folder, filepath, short_filename, directory):
     for annotation in annotations:
         if annotation.attrib['type'] == 'truth':
             formula_in_latex = annotation.text
-    hw = handwritten_data.HandwrittenData(json.dumps(recording), formula_in_latex=formula_in_latex,
+    hw = handwritten_data.HandwrittenData(json.dumps(recording), strokes = raw_recording, formula_in_latex=formula_in_latex,
                                           filename=short_filename, filepath=folder[0] + directory,
                                           raw_data_id=directory + short_filename)
     for annotation in annotations:
@@ -168,6 +172,11 @@ def read(folder, filepath, short_filename, directory):
     if len(_flat_seg) != len(recording):
         print "SEGMENTATION LENGTH IS OFF"
         return None
+
+    if set(_flat_seg) != set(range(len(_flat_seg))):
+        print "Don't understand this error but oh well"
+        return None
+
     assert len(_flat_seg) == len(recording), \
         ("Segmentation had length %i, but recording has %i strokes (%s)" %
          (len(_flat_seg), len(recording), filepath))
@@ -190,9 +199,12 @@ def read_equations(folder,start,end):
     total_num_files = 0
     count = 0
     for directory in folder[start:end]:
+        print folder[0] + directory
         filenames = os.listdir(folder[0] + directory)
+        print len(filenames)
         invalid_inputs = 0
         for i, filename in enumerate(filenames):
+           # print filename
             if "inkml" not in filename:
                 continue
             filename_copy = filename
@@ -201,6 +213,7 @@ def read_equations(folder,start,end):
 
             hw = read(folder, filename, filename_copy, directory)
             if hw == None:
+               # print "None: {}".format(filename)
                 invalid_inputs += 1
                 continue
             if hw.formula_in_latex is not None:
@@ -227,7 +240,7 @@ def read_equations(folder,start,end):
         
 
     print "INFO: Out of {} files, {} were not parsed properly. ".format(len(filenames), invalid_inputs)
-
+    print total_num_files
     print "ACCURACY: Baseline parsing error: {}".format(1.0 * parse_error / total_num_files)
 
     return recordings
@@ -266,6 +279,8 @@ def validation(TRAINING_X,TRAINING_Y):
  #   print len(X), len(TEST_X)
 
     return sparse_training_data, Y, sparse_test_data, TEST_Y
+
+
 
 def sparse_svm_linear_train(TRAINING_X, TRAINING_Y):
     print "************"
@@ -441,7 +456,7 @@ def svm_train(TRAINING_X, TRAINING_Y):
     print len(X)
 
 
-    clf = svm.SVC(decision_function_shape='ovo', gamma=0.001, C=50.0)
+    clf = svm.SVC(decision_function_shape='ovo', gamma=0.01, C=100.0)
     clf.fit(X, Y, weights)
 
     # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
