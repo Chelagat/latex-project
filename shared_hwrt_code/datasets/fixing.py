@@ -3,12 +3,6 @@ from parallelism_read import read_images_flattened
 from util import *
 
 
-def train_svm():
-    path = '/Users/norahborus/Documents/DATA/COMBINED/'
-    folders = ['/Users/norahborus/Documents/DATA/COMBINED/', 'TRAIN_Characters/', 'TEST_Characters/']
-    TRAINING_X, TRAINING_Y, TEST_X, TEST_Y, y_map = read_images_flattened(folders, using_hog_features=True, train_bound=2000, test_bound=200)
-    clf = svm_linear_train(TRAINING_X, TRAINING_Y, TEST_Y)
-    svm_linear_test(clf, TEST_X, TEST_Y, y_map)
 
 
 import numpy as np

@@ -68,38 +68,33 @@ from parallelism_read import read_image_files
 from parallelism_read import read_image_files_v2
 from parallelism_read import read_image_files_v4
 from data_augmentation import read_images_nn_augmented
-from cnn_from_pset4 import get_training_data
+
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].
 # We transform them to Tensors of normalized range [-1, 1]
 
 transform = transforms.Compose([
-     transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5,0.5), (0.5, 0.5,0.5))
-       ])
+    transforms.ToTensor(),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+])
 
 
-
-#training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_training_2011/", "TrainINKML_2013/",
+# training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_training_2011/", "TrainINKML_2013/",
 #                    "trainData_2012_part1/", "trainData_2012_part2/"]
 
 
 def load_data():
-
-  #  folders = ['/Users/norahborus/Documents/DATA/training_data/', '12_Characters/', 'TEST_Characters/']
+    #  folders = ['/Users/norahborus/Documents/DATA/training_data/', '12_Characters/', 'TEST_Characters/']
     path = "/Users/norahborus/Documents/DATA/training_data/"
-   # folders = ['/Users/norahborus/Documents/DATA/CLASSES/', 'random_sample_200/', 'random_sample_200/']
-
-
-    folders = ['/Users/norahborus/Documents/DATA/COMBINED/', '32x32_All/', '32x32_All/']
-  #  path = "/Users/norahborus/Documents/DATA/training_data/"
-   # folders = ['/Users/norahborus/Documents/DATA/training_data/', 'TrainINKML_images_quarter_size/', 'TrainINKML_images_quarter_size/']
-  #  temp_train_x, temp_train_y, temp_test_x, temp_test_y, y_map = get_training_data(folders)
+    folders = ['/Users/norahborus/Documents/DATA/training_data/200x200/', 'CROHME_Characters/', 'CROHME_Characters/']
+  #  folders = ['/Users/norahborus/Documents/DATA/training_data/HOG_200x200/', 'CROHME_images_quarter_size/', 'CROHME_images_quarter_size/']
+    #  path = "/Users/norahborus/Documents/DATA/training_data/"
+    # folders = ['/Users/norahborus/Documents/DATA/training_data/', 'TrainINKML_images_quarter_size/', 'TrainINKML_images_quarter_size/']
     temp_train_x, temp_train_y, temp_test_x, temp_test_y, y_map = read_image_files_v4(folders)
     print "YMap: {}".format(y_map)
 
-   # with open(path + "y_map", "w") as fp:
-   #     cPickle.dump(y_map, fp)
+    # with open(path + "y_map", "w") as fp:
+    #     cPickle.dump(y_map, fp)
 
     train_data = []
     test_data = []
@@ -110,7 +105,7 @@ def load_data():
         png = Image.open(image_file)
         image = png.convert('L')
         img_tensor = transform(image)
-       # print img_tensor.size()
+        # print img_tensor.size()
         train_data.append((img_tensor, y_map[label]))
 
     for image_file, label in zip(temp_test_x, temp_test_y):
@@ -121,8 +116,6 @@ def load_data():
 
     print "DONE"
     return train_data, test_data, classes, y_map
-
-
 
 
 '''
@@ -146,9 +139,7 @@ for image, label in zip(temp_test_x, temp_test_y):
 
 '''
 
-
-
-#classes = ('plane', 'car', 'bird', 'cat',
+# classes = ('plane', 'car', 'bird', 'cat',
 #           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 ########################################################################
@@ -159,7 +150,6 @@ for image, label in zip(temp_test_x, temp_test_y):
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # Copy the neural network from the Neural Networks section before and modify it to
 # take 3-channel images (instead of 1-channel images as it was defined).
-
 
 
 from torch.autograd import Variable
@@ -173,30 +163,40 @@ class Net(nn.Module):
         super(Net, self).__init__()
         # 1 input image channel, 6 output channels, 5x5 square convolution
         # kernel
+        '''
+        self.conv1 = nn.Conv2d(1, 6, 5)
+        self.conv2 = nn.Conv2d(6, 100, 5)
+        # an affine operation: y = Wx + b
+        self.fc1 = nn.Linear(100 * 47 * 47, 750)
+        self.fc2 = nn.Linear(750, 525)
+        self.fc3 = nn.Linear(525, len(classes))
+        self.debug = False
+        '''
         self.conv1 = nn.Conv2d(1, 6, 5)
         self.conv2 = nn.Conv2d(6, 16, 5)
         # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(16*5*5, 120)
+        self.fc1 = nn.Linear(16*47*47, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, len(classes))
+        self.debug = False
 
     def forward(self, x):
         # Max pooling over a (2, 2) window
-       # print "**********************************************************"
-       # print "#START: size", x.size()
+        if self.debug: print "**********************************************************"
+        if self.debug: print "#START: size", x.size()
         x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-       # print "#After max pool: size", x.size()
+        if self.debug: print "#After max pool: size", x.size()
         # If the size is a square you can only specify a single number
         x = F.max_pool2d(F.relu(self.conv2(x)), 2)
-       # print "#After 2nd max pool: size", x.size()
+        if self.debug:print "#After 2nd max pool: size", x.size()
         x = x.view(-1, self.num_flat_features(x))
-       # print "AFTER X.VIEW: size at end: ", x.size()
+        if self.debug:print "AFTER X.VIEW: size at end: ", x.size()
         x = F.relu(self.fc1(x))
-       # print "AFTER 1ST relu: size at end: ", x.size()
+        if self.debug:print "AFTER 1ST relu: size at end: ", x.size()
         x = F.relu(self.fc2(x))
-       # print "AFTER 2ND relu: size at end: ", x.size()
+        if self.debug:print "AFTER 2ND relu: size at end: ", x.size()
         x = self.fc3(x)
-       # print "**********************************************************"
+        if self.debug: print "**********************************************************"
         return x
 
     def num_flat_features(self, x):
@@ -210,13 +210,14 @@ class Net(nn.Module):
 import torch.optim as optim
 import tensorflow as tf
 
+
 def normalize(Y):
-    min_val  = np.min(Y)
-  #  print "Y before: {}".format(Y)
-  #  print min_val
+    min_val = np.min(Y)
+    #  print "Y before: {}".format(Y)
+    #  print min_val
     Y = Y + abs(min_val)
-  #  print "Y after: {}".format(Y)
-    return 1.0*Y / np.sum(Y)
+    #  print "Y after: {}".format(Y)
+    return 1.0 * Y / np.sum(Y)
 
 
 import cPickle
@@ -236,7 +237,6 @@ def get_train_accuracy(train_data, net, classes):
     #
     # Okay, first step. Let us display an image from the test set to get familiar.
 
-
     ########################################################################
     # The results seem pretty good.
     #
@@ -246,8 +246,7 @@ def get_train_accuracy(train_data, net, classes):
     total = 0
     sess = tf.Session()
     for image, label in test_data:
-      #  one_d = torch.Tensor(1, 1, 200, 200)
-        one_d = torch.Tensor(1, 1, 32, 32)
+        one_d = torch.Tensor(1, 1,200, 200)
         labels = torch.Tensor(1, ).long()
         one_d[0] = image
         labels[0] = label
@@ -281,8 +280,8 @@ def get_train_accuracy(train_data, net, classes):
     print('Accuracy of the network on the {} train images: {}%'.format(len(train_data), accuracy))
     return accuracy
 
-def train(train_data, test_data, classes):
 
+def train(train_data, test_data, classes):
     import matplotlib.pyplot as plt
     net = Net(classes)
 
@@ -290,8 +289,6 @@ def train(train_data, test_data, classes):
     # 3. Define a Loss function and optimizer
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     # Let's use a Classification Cross-Entropy loss and SGD with momentum
-
-
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
@@ -307,14 +304,13 @@ def train(train_data, test_data, classes):
     sess = tf.Session()
     train_loss_history = []
     train_accuracy_history = []
-    for epoch in range(10):  # loop over the dataset multiple times
+    for epoch in range(5):  # loop over the dataset multiple times
         print "Epoch: {}".format(epoch)
         running_loss = 0.0
         print len(train_data)
         for i, data in enumerate(train_data):
-            input,label = data
-           # one_d = torch.Tensor(1, 1, 200, 200)
-            one_d = torch.Tensor(1, 1, 32, 32)
+            input, label = data
+            one_d = torch.Tensor(1, 1, 200, 200)
             labels = torch.Tensor(1, ).long()
             one_d[0] = input
             labels[0] = label
@@ -332,24 +328,23 @@ def train(train_data, test_data, classes):
             outputs = net(inputs)
             #  print outputs
             #  print labels
-           # print outputs, labels
+            # print outputs, labels
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
             # print statistics
             running_loss += loss.data[0]
-
         accuracy = get_train_accuracy(train_data, net, classes)
         print "TRAIN ACCURACY: ", accuracy
         train_loss_history.append(running_loss)
         train_accuracy_history.append(accuracy)
 
     accuracy = get_train_accuracy(train_data, net, classes)
-    print "END --> TRAIN ACCURACY: ", accuracy
+    print "TRAIN ACCURACY: ", accuracy
     with open("cnn_accuracy", "w") as fp:
         cPickle.dump(train_accuracy_history, fp)
 
-      #  print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
+    #  print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
 
     '''
     train_loss, = plt.plot(range(len(train_loss_history)), train_loss_history, label='Train Loss', color='red')
@@ -363,12 +358,10 @@ def train(train_data, test_data, classes):
     plt.savefig('cnn_accuracy_with_regularization.png')
     with open('cnn', 'w') as fp:
         cPickle.dump(net, fp)
-    
+
     '''
 
     return net
-
-
 
 
 def test_single_example(image, net, classes):
@@ -384,10 +377,6 @@ def test_single_example(image, net, classes):
     return outputs, classes
 
 
-from collections import OrderedDict
-import matplotlib
-import matplotlib.pyplot as plt
-
 def test(test_data, net, classes):
     ########################################################################
     # 5. Test the network on the test data
@@ -402,7 +391,6 @@ def test(test_data, net, classes):
     #
     # Okay, first step. Let us display an image from the test set to get familiar.
 
-
     ########################################################################
     # The results seem pretty good.
     #
@@ -412,8 +400,7 @@ def test(test_data, net, classes):
     total = 0
     sess = tf.Session()
     for image, label in test_data:
-       # one_d = torch.Tensor(1, 1, 200, 200)
-        one_d = torch.Tensor(1, 1, 32, 32)
+        one_d = torch.Tensor(1, 1, 200, 200)
         labels = torch.Tensor(1, ).long()
         one_d[0] = image
         labels[0] = label
@@ -458,8 +445,8 @@ def test(test_data, net, classes):
     print len(test_data)
 
     for image, label in test_data:
-       # one_d = torch.Tensor(1, 1, 200, 200)
-        one_d = torch.Tensor(1, 1, 32, 32)
+        # one_d = torch.Tensor(1, 1, 200, 200)
+        one_d = torch.Tensor(1, 1, 200, 200)
         labels = torch.Tensor(1, ).long()
         one_d[0] = image
         labels[0] = label
@@ -491,26 +478,14 @@ def test(test_data, net, classes):
         class_correct[label] += c[0]
         class_total[label] += 1
 
-    accuracy_map = {}
     for i in range(len(classes)):
         if class_total[i] == 0:
             continue
         print('Accuracy of %5s : %2d %%' % (
             classes[i], 100 * class_correct[i] / class_total[i]))
 
-        accuracy_map[y_map[i]] = 100 * class_correct[i] / class_total[i]
-
-
-    od = OrderedDict(sorted(accuracy_map.items()))
-    print "DONE WITH COMPILING ACCURACY INFORMATION"
-    print "Total # of classes in dev set: {}".format(len(od.keys()))
-    plt.rcParams["figure.figsize"] = [16, 9]
-    matplotlib.rcParams.update({'font.size': 6})
-    y_pos = np.arange(len(od.keys()))
-    plt.bar(y_pos, od.values(), align='center', alpha=0.5, color='blue')
-    plt.xticks(y_pos, od.keys(),rotation=90)
-    plt.savefig('DATA_ANALYSIS/cnn_accuracy.png')
     print "Total number of classes: {}".format(len(classes))
+
 
 def main():
     train_data, test_data, classes, y_map = load_data()

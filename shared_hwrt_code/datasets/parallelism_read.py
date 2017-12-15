@@ -51,22 +51,7 @@ import math
 v_1 = True
 from ast import literal_eval
 
-# Calculate the minimum distance betwen two given traces (For segmentation)
-def traceDistance(trace_1, trace_2):
-    min_distance = float('inf')
-   # print trace_1
-  #  print trace_2
-    for coord1 in trace_1:
-        for coord2 in trace_2:
-           # print (coord1.strip()).split(" ")
-           # print (coord2.strip()).split(" ")
-            x1, y1 = (coord1.strip()).split(" ")
-            x2, y2 = (coord2.strip()).split(" ")
-            distance = ((int(x1) - int(x2))**2 + (int(y1) - int(y2))**2) **0.5
-            min_distance = min(min_distance, distance)
 
-    #print min_distance
-    return min_distance
 
 
 def store_entire_equation(path, folders, start, end, name):
@@ -80,99 +65,12 @@ def store_entire_equation(path, folders, start, end, name):
         print "Done with #{}".format(index)
         hw.get_training_example_v3(storage_directory)
 
-def cseg(hw):
-    traces = literal_eval(hw.raw_data_json)
-    trace_bounds = []
-    for t in traces:
-        max_x, min_x, max_y, min_y = float('-inf'), float('+inf'), float('-inf'), float('+inf')
-        for d in t:
-            y = d['y']
-            x = d['x']
-            if y > max_y:
-                max_y = y
-            elif y < min_y:
-                min_y = y
-            if x > max_x:
-                max_x = x
-            elif x < min_x:
-                min_x = x
-        trace_bounds.append((max_x, min_x, max_y, min_y))
-
-    # Determine groupings:
-    seg_guess = []
-    current_group = [0]
-    for i in range(1, len(trace_bounds)):
-
-        for check_index in current_group:
-
-            to_check = trace_bounds[check_index]
-
-            # Check trace_bounds[i] for overlap with to_check
-            if trace_bounds[i][1] < to_check[0]:
-                current_group.append(i)
-                break
-            else:
-                seg_guess.append(current_group)
-                current_group = [i]
-                break
-
-    if len(current_group) > 0:
-        seg_guess.append(current_group)
-
-    return seg_guess
 
 from operator import itemgetter
 
-def svm_segment(path, folders, start, end, name):
-    min_global = 10.0
-    hw_objects = read_equations(folders, start, end)
-    for index, hw in enumerate(hw_objects[:1]):
-
-       # print "Point list: "
-
-        pointlist = hw.strokes
-        print len(pointlist)
-        neighbors = defaultdict(list)
-        for i, curr_trace in enumerate(pointlist[:-1]):
-            min_distance = float('inf')
-            for j, other_trace in enumerate(pointlist[i+1:]):
-                index = j+i+1
-                distance = traceDistance(curr_trace, other_trace)
-                if distance <= min_global:
-                    neighbors[i].append(index)
-
-        seg_guess = cseg(hw)
-        groups = []
-        values = list(itertools.chain.from_iterable(neighbors.values()))
-        neighbors_copy = {}
-        seen = set()
-        print neighbors
-        for key, vals in neighbors.iteritems():
-            if key in seen:
-                continue
-            neighbors_copy[key] = vals
-
-            for val in vals:
-                if val in neighbors:
-                    neighbors_copy[key] = list(set(neighbors_copy[key] + neighbors[val]))
-                    seen.add(val)
-
-        neighbors = neighbors_copy
-        for k in range(len(pointlist)):
-            if k not in neighbors.keys() and k not in values:
-                groups.append([k])
-
-        for key,val in neighbors.iteritems():
-            group = [key] + val
-            groups.append(group)
-
-        groups = sorted(groups, key=itemgetter(0))
-        print neighbors
-        print "Mine: ", groups
-        print "Cseg: ", seg_guess
-        print "Segmentation: {}".format(hw.segmentation)
-
 import util
+def add_to_test_v4():
+    return random.random() < 0.10
 
 
 def store_images(path, folders, start, end, name):
@@ -190,27 +88,19 @@ def store_info(path, folders, start, end, name):
     # Idea: store sparse dictionary
     hw_objects = read_equations(folders, start, end)
     storage_directory = path + name
-   # segment_directory = path + "segment_" + name
-    print storage_directory
     if not os.path.exists(storage_directory):
         os.makedirs(storage_directory)
-
-   # if not os.path.exists(segment_directory):
-  #      os.makedirs(segment_directory)
 
     for index, hw in enumerate(hw_objects):
         print "Done with #{}".format(index)
         x,y = hw.get_training_example_without_hog()
         rep_normal = {}
-      #  rep_segment = {}
         for np_array, symbol in zip(x, y):
             # Convert sparse np array to dictionary
 
             rows, cols = np_array.shape
             rep_normal['num_rows'] = rows
             rep_normal['num_cols'] = cols
-           # rep_segment['num_rows'] = rows
-           # rep_segment['num_cols'] = cols
             np_array_map = {}
             for row in range(rows):
                 for col in range(cols):
@@ -224,24 +114,8 @@ def store_info(path, folders, start, end, name):
 
 
         filename_normal = storage_directory + hw.filename
-      #  filename_segment = segment_directory + hw.filename
         with open(filename_normal, "w") as fp:
             cPickle.dump(rep_normal, fp)
-
-       # if 'symbol' in rep_segment:
-       #     with open(filename_segment, "w") as fp:
-       #         cPickle.dump(rep_segment, fp)
-
-    '''
-    storage_directory_svm = storage_directory + "svm/"
-    if not os.path.exists(storage_directory_svm):
-        os.makedirs(storage_directory_svm)
-
-    filename = storage_directory_svm + "svm.pickle"
-    with open(filename, "w") as fp:
-        pickle.dump(svm, fp)
-
-    '''
 
 
 
@@ -278,7 +152,7 @@ def load_info(equation_file):
 from PIL import Image
 from numpy import array
 from scipy.ndimage.filters import gaussian_filter
-def load_info_v2(equation_file, downsize=False):
+def load_info_v2(short_filename, equation_file, downsize=False):
    # print "***********************************************"
     TRAINING_X = []
     TRAINING_Y = []
@@ -308,10 +182,18 @@ def load_info_v2(equation_file, downsize=False):
             # image.show()
             np_array = array(image)
 
+
+        dir = '/Users/norahborus/Documents/DATA/training_data/CROHME_image_attempt/'
+        filename = dir + "_" + short_filename + symbol[0]+ '.png'
+        im = Image.fromarray(np_array * 255.0)
+        if im.mode != 'RGB':
+            im = im.convert('RGB')
+        im.save(filename, "PNG")
        # np_array = gaussian_filter(np_array, sigma=7)
         #img.resize((100,100),Image.ANTIALIAS)
        # img.show()
         #img.save("test.jpg")
+
         sparse_matrix = csr_matrix(np_array)
        # print sparse_matrix.shape
         #plt.imshow(np_array,cmap='gray')
@@ -445,9 +327,8 @@ import util
 import collections
 
 
-def add_to_test_v4():
-    return random.random() < 0.25
 
+from data_augmentation import combined_with_augmentation_limit_500
 
 
 def read_image_files_v4(folders):
@@ -459,9 +340,7 @@ def read_image_files_v4(folders):
     y_map = {}
     counter = 0
     train_filenames = np.array(os.listdir(path + folders[1]))
-  # np.random.shuffle(train_filenames)
-  #  np.random.shuffle(test_filenames)
-    print util.commonly_missegmented_symbols
+    np.random.shuffle(train_filenames)
 
     train_y_freq = defaultdict(int)
     test_y_freq = defaultdict(int)
@@ -483,18 +362,15 @@ def read_image_files_v4(folders):
             y_map[y] = counter
             counter += 1
 
-        if y in util.commonly_missegmented_symbols:
-            if add_to_test_v4():
-                test_y_freq[y] += 1
-                TEST_X.append(x)
-                TEST_Y.append(y)
-            else:
-                train_y_freq[y] += 1
-                TRAINING_X.append(x)
-                TRAINING_Y.append(y)
+        if add_to_test_v4():
+            test_y_freq[y] += 1
+            TEST_X.append(x)
+            TEST_Y.append(y)
         else:
+            train_y_freq[y] += 1
             TRAINING_X.append(x)
             TRAINING_Y.append(y)
+
 
     test_y_freq = collections.OrderedDict(sorted(test_y_freq.items()))
     print "TEST Y FREQ: ", test_y_freq
@@ -513,10 +389,10 @@ def read_image_files_v2(folders, segment = False):
     test_filenames = np.array(os.listdir(path + folders[2]))
     test_y_freq = defaultdict(int)
     train_y_freq = defaultdict(int)
-  #  np.random.shuffle(train_filenames)
-  #  np.random.shuffle(test_filenames)
+   # np.random.shuffle(train_filenames)
+   # np.random.shuffle(test_filenames)
     print util.commonly_missegmented_symbols
-    for filename in test_filenames:
+    for filename in test_filenames[:400]:
         x = path + folders[2] +filename
         if 'kml' not in filename:
             continue
@@ -527,7 +403,7 @@ def read_image_files_v2(folders, segment = False):
             if  y == 'forward_slash':
                 y = '/'
         else:
-            y = filename[filename.index('kml')+3:-4]
+            y = filename[filename.index('kml')+3:filename.index('png')-1]
             if  y == 'forward_slash':
                 y = '/'
            # print "Filename: {}, symbol: {}".format(x, y)
@@ -559,7 +435,7 @@ def read_image_files_v2(folders, segment = False):
     test_y = set(TEST_Y)
 
     diff = train_y - test_y
-    for index, filename in enumerate(train_filenames):
+    for index, filename in enumerate(train_filenames[:4000]):
       # print "Train file: {}".format(index)
         x = path + folders[1] +filename
         if 'kml' not in filename:
@@ -606,8 +482,10 @@ import matplotlib.pyplot as plt
 
 from skimage.feature import hog
 from skimage import data, exposure
-
+from PIL import Image
 from skimage import data, color, exposure
+from data_augmentation import combined_with_augmentation_limit_500
+
 
 def read_images_flattened_v2(folders, segment = False, using_hog_features = False):
     path = folders[0]
@@ -673,6 +551,8 @@ def read_images_flattened_v2(folders, segment = False, using_hog_features = Fals
     print len(TRAINING_Y), len(TEST_Y)
     return TRAINING_X, TRAINING_Y, TEST_X, TEST_Y, y_map
 
+
+
 def read_images_flattened(folders, segment = False, using_hog_features = False, train_bound=None, test_bound=None):
     path = folders[0]
     TRAINING_X = []
@@ -681,16 +561,30 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
     TEST_Y = []
     y_map = {}
     counter = 0
-    train_filenames = np.array(os.listdir(path + folders[1]))
-    test_filenames = np.array(os.listdir(path + folders[2]))
+    if folders[1] == folders[2]:
+        print "Reduced size"
+        all_files = np.array(os.listdir(path + folders[1]))
+        np.random.shuffle(all_files)
+        all_files = all_files[:1000]
+        m, = all_files.shape
+        print "M: ", m
+        test_filenames = all_files[:m / 10]
+        train_filenames = all_files[m / 10:]
+        print len(test_filenames), len(train_filenames)
 
-  #  np.random.shuffle(train_filenames)
-  #  np.random.shuffle(test_filenames)
+    else:
+        train_filenames = np.array(os.listdir(path + folders[1]))
+        test_filenames = np.array(os.listdir(path + folders[2]))
+
+        np.random.shuffle(train_filenames)
+        np.random.shuffle(test_filenames)
+
     if train_bound != None:
         train_filenames = train_filenames[:train_bound]
 
     if test_bound != None:
         test_filenames = test_filenames[:test_bound]
+
     for index, filename in enumerate(test_filenames):
         print "*********************************TEST FILE #{}".format(index)
         x = path + folders[2] +filename
@@ -705,7 +599,12 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
             array = (np.asarray(hog_image_rescaled)).flatten()
         else:
             image = Image.open(x).convert('L')
-            array = (np.asarray(image)).flatten()
+            array = np.asarray(image)
+            array = array / 255.0
+           # print "SHAPE: {}".format(array.shape)
+            array = array.flatten()
+
+
         if 'png' not in filename:
             y = filename[filename.index('kml')+3:]
             if  y == 'forward_slash':
@@ -715,22 +614,14 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
             if  y == 'forward_slash':
                 y = '/'
 
-        if segment:
-            print y
-            if y in util.commonly_missegmented_symbols:
-                if y not in y_map:
-                    y_map[y] = counter
-                    counter += 1
-                TEST_X.append(array)
-                TEST_Y.append(y)
 
-        else:
-            if y not in y_map:
-                y_map[y] = counter
-                counter += 1
+        if y not in y_map:
+            y_map[y] = counter
+            counter += 1
 
-            TEST_X.append(array)
-            TEST_Y.append(y)
+
+        TEST_X.append(array)
+        TEST_Y.append(y)
 
     print "Done with test files"
 
@@ -740,6 +631,7 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
           continue
         x = path + folders[1] + filename
         if using_hog_features:
+            print "using HOG"
             image = color.rgb2gray(np.asarray((Image.open(x)).convert('RGB')))
             fd, hog_image = hog(image, orientations=8, pixels_per_cell=(32, 32), cells_per_block=(1, 1), visualise=True)
 
@@ -747,8 +639,13 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
             hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 0.02))
             array = (np.asarray(hog_image_rescaled)).flatten()
         else:
+            print "HERE HERE HERE"
             image = Image.open(x).convert('L')
-            array = (np.asarray(image)).flatten()
+
+            array = np.asarray(image)
+            array = array / 255.0
+          #  print "SHAPE: {}".format(array.shape)
+            array = array.flatten()
 
         if 'png' not in filename:
             y = filename[filename.index('kml')+3:]
@@ -759,25 +656,17 @@ def read_images_flattened(folders, segment = False, using_hog_features = False, 
             if  y == 'forward_slash':
                 y = '/'
            # print "Filename: {}, symbol: {}".format(x, y)
-        if segment:
-           # print y
-            if y in util.commonly_missegmented_symbols:
-                if y not in y_map:
-                    y_map[y] = counter
-                    counter += 1
-                TRAINING_X.append(array)
-                TRAINING_Y.append(y)
 
-        else:
-            if y not in y_map:
-                y_map[y] = counter
-                counter += 1
+        if y not in y_map:
+            y_map[y] = counter
+            counter += 1
 
-            TRAINING_X.append(array)
-            TRAINING_Y.append(y)
+        TRAINING_X.append(array)
+        TRAINING_Y.append(y)
 
 
     print len(TRAINING_Y), len(TEST_Y)
+    print "Shape: ", len(TEST_X[0])
     return TRAINING_X, TRAINING_Y, TEST_X, TEST_Y, y_map
 
 
@@ -939,7 +828,7 @@ def read_tensor_convert(path):
 
 def read_files_svm(path, dataset_size=None, is_test=False, is_train=False):
     filenames = os.listdir(path)
-    filenames = [path + file for file in filenames]
+    filenames = [file for file in filenames[:20]]
     start = datetime.datetime.now()
     X = []
     Y = []
@@ -949,8 +838,10 @@ def read_files_svm(path, dataset_size=None, is_test=False, is_train=False):
 
     print "TOTAL # FILES FOR PATH", path,  len(filenames)
     for index, file in enumerate(filenames):
+        if 'inkml' not in file:
+            continue
         print "Done --> {}".format(index)
-        x, y = load_info_v2(file)
+        x, y = load_info_v2(file, path + file)
         X += x
         Y += y
         if is_train and len(Y) >= 6000:
@@ -1082,10 +973,17 @@ def read_files(path):
 def main():
     poster_session = True
     if poster_session:
+        '''
         path = '/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/'
-       # training_folders = ['/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/', "12/"]
-        training_folders = ['/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/', "12_without_hog/"]
+        training_folders = ['/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/', "23/"]
+       # training_folders = ['/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/', "12_without_hog/"]
         TRAINING_X, TRAINING_Y, TEST_X, TEST_Y = read_files_sequence_v2(path, training_folders)
+        '''
+        path = '/Users/norahborus/Documents/DATA/training_data/'
+        training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_half_size/"]
+        # training_folders = ['/Users/norahborus/Documents/DATA/training_data/POSTER_SESSION/', "12_without_hog/"]
+        TRAINING_X, TRAINING_Y, TEST_X, TEST_Y = read_files_sequence_v2(path, training_folders)
+        print "Number of train examples: ", len(TRAINING_Y), "Number of test examples: ", len(TEST_Y)
         y_map = {}
         counter = 0
         NEW_TRAINING_Y = []
@@ -1093,7 +991,7 @@ def main():
         freq = defaultdict(int)
         # print TRAINING_Y
         for y in TRAINING_Y:
-            print y, type(y)
+          #  print y, type(y)
             freq[y] += 1
             if y in y_map:
                 NEW_TRAINING_Y.append(y_map[y])
@@ -1125,25 +1023,8 @@ def main():
         # hps, _, _ = optunity.maximize(svm_auc, num_evals=200, logC=[-5, 2], logGamma=[-5, 1])
         # clf = svm.SVC(C=10 ** hps['logC'], gamma=10 ** hps['logGamma']).fit(X, Y)
 
-        correct = 0
-        error = 0
-
-        for i in range(len(TRAINING_X)):
-            dec = clf.decision_function([TRAINING_X[i]])
-            max_index = np.argmax(dec[0])
-         #   print "Len dec: {}, Dec: {}".format(len(dec[0]), dec[0])
-           # print "Max: {}".format(max(dec[0]))
-          #  print "Max index: {}".format(max_index)
-            for symbol, index in y_map.iteritems():
-                if index == max_index:
-                  #  print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
-                    if symbol != TRAINING_Y[i]:
-                        error += 1
-                    else:
-                        correct += 1
-
-        print "TRAIN Accuracy: {}".format(1.0 * correct / len(TRAINING_Y))
-        print "TRAIN Error: {}".format(1.0 * error / len(TRAINING_Y))
+        with open("SVMs/svm_CROHME", "w") as fp:
+            cPickle.dump(clf, fp)
 
         correct = 0
         error = 0
@@ -1165,6 +1046,7 @@ def main():
         print "TEST Error: {}".format(1.0 * error / len(TEST_Y))
 
     if not poster_session and v_1:
+
         path = '/Users/norahborus/Documents/DATA/COMBINED/'
         training_folders = ['/Users/norahborus/Documents/DATA/COMBINED/', 'TRAIN/', 'TEST/']
         path = '/Users/norahborus/Documents/DATA/training_data/'
@@ -1326,7 +1208,7 @@ def store():
 
 if __name__ == '__main__':
     random.seed(10)
-   # path = '/Users/norahborus/Documents/DATA/training_data/'
+    #path = '/Users/norahborus/Documents/DATA/training_data/'
    # training_folders = ['/Users/norahborus/Documents/DATA/training_data/', "CROHME_training_2011/", "TrainINKML_2013/", "trainData_2012_part1/", "trainData_2012_part2/"]
    # read_images_direct(training_folders, 1,2)
   #  store()
