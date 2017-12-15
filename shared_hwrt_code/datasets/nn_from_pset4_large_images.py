@@ -130,7 +130,7 @@ def nn_train(trainData, trainLabels, num_classes, devData=None, devLabels=None):
     train_accuracy_history = []
     dev_accuracy_history = []
     regularization_constant = 0.0001
-    for epoch in range(20):
+    for epoch in range(5):
         for batch_index in range(num_iterations):
             batch_train_data = trainData[batch_index*batch_size:batch_index*batch_size+batch_size]
           #  print batch_train_data.shape
@@ -186,10 +186,9 @@ def nn_train(trainData, trainLabels, num_classes, devData=None, devLabels=None):
     return params
 
 
-def nn_test(data, labels, params, num_classes, y_map):
+def nn_test(data, labels, params, num_classes):
     h, output, cost = forward_prop(data, labels, params, num_classes)
     accuracy = compute_accuracy(output.T, labels)
-    compute_accuracy_per_class(output.T, labels, y_map)
     return accuracy
 
 
@@ -214,148 +213,12 @@ def compute_accuracy(output, labels):
     accuracy = (np.argmax(output, axis=1) == np.argmax(labels, axis=1)).sum() * 1. / labels.shape[0]
     return accuracy * 100
 
-from collections import defaultdict
-from collections import OrderedDict
-import matplotlib
-
-def compute_accuracy_per_class(output, labels, y_map):
-    class_correct = defaultdict(int)
-    class_total = defaultdict(int)
-    inv_map = {v: k for k, v in y_map.iteritems()}
-    for prediction, label in zip(output, labels):
-        predicted_class = inv_map[np.argmax(prediction)]
-        real_class = inv_map[np.argmax(label)]
-        class_total[real_class] += 1
-        if real_class == predicted_class:
-            class_correct[real_class] += 1
-
-    accuracy_map = {}
-    rare_symbols = {'\\Delta', '\\exists', '\\forall', '\\gamma', '\\geq', '\\gt', '\\in', '\\lambda',
-      '\\log', '\\lt', '\\mu', '\\neq', '\\phi', '\\prime', '\\sigma',
-     }
-    for symbol in rare_symbols:
-        accuracy_map[symbol] = 30
-
-    for val in class_total:
-        accuracy = 100.0 * class_correct[val] / class_total[val]
-        if val in rare_symbols:
-            accuracy_map[val] = max(30,accuracy)
-            print "Class: {}, Accuracy: {}".format(val, accuracy)
-
-
-    average_accuracy = sum(accuracy_map.values()) / len(accuracy_map.values())
-    od = OrderedDict(sorted(accuracy_map.items()))
-    print "DONE WITH COMPILING ACCURACY INFORMATION"
-    print "Total # of classes in dev set: {}".format(len(od.keys()))
-    plt.rcParams["figure.figsize"] = [16, 9]
-    matplotlib.rcParams.update({'font.size': 6})
-    y_pos = np.arange(len(od.keys()))
-    plt.ylim((0, 100))
-    plt.bar(y_pos, od.values(), align='center', alpha=0.5, color='green')
-    plt.xticks(y_pos, od.keys(),rotation=90)
-
-    plt.savefig('DATA_ANALYSIS/rare_classes_after_augmentation.png'.format(average_accuracy))
 
 def one_hot_labels(labels, num_classes):
     one_hot_labels = np.zeros((labels.size, num_classes))
     one_hot_labels[np.arange(labels.size), labels.astype(int)] = 1
     return one_hot_labels
 
-
-import os
-from PIL import Image
-def get_training_data(folders):
-    TRAINING_X = []
-    TRAINING_Y = []
-    DEV_X  = []
-    DEV_Y = []
-    y_map = {}
-    path = '/Users/norahborus/Documents/DATA/CLASSES/32x32_Test/'
-    size = 50
-    counter = 0
-
-    symbols = {'!', '(', ')', '+', ',', '-', 'dot', 'forward_slash', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '=', 'capital_A', 'capital_B', 'capital_C', 'capital_E',
-     'capital_F', 'capital_G', 'capital_H', 'capital_I', 'capital_L', 'capital_M', 'capital_N', 'capital_P', 'capital_R', 'capital_S', 'capital_T', 'capital_V', 'capital_X', 'capital_Y', '[', '\\Delta', '\\alpha', '\\beta', '\\cos',
-     '\\div', '\\exists', '\\forall', '\\gamma', '\\geq', '\\gt', '\\in', '\\infty', '\\int', '\\lambda', '\\ldots',
-     '\\leq', '\\lim', '\\log', '\\lt', '\\mu', '\\neq', '\\phi', '\\pi', '\\pm', '\\prime', '\\rightarrow', '\\sigma',
-     '\\sin', '\\sqrt', '\\sum', '\\tan', '\\theta', '\\times', '\\{', '\\}', ']', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-     'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '|'}
-    directories = os.listdir(path)
-    all_files = []
-    for dir in directories:
-        if dir in symbols:
-            filenames = np.array(os.listdir(path + dir + '/'))
-            filenames = [path + dir + '/' + file for file in filenames]
-            np.random.shuffle(filenames)
-            filenames = filenames[:size]
-            for filename in filenames:
-                all_files.append(filename)
-
-    for index, filename in enumerate(all_files):
-        print "*********************************TEST FILE #{}".format(index)
-        x = filename
-        if 'kml' not in filename:
-            continue
-
-        image = Image.open(x).convert('L')
-        array = np.asarray(image)
-        array = array / 255.0
-        array = array.flatten()
-
-
-        if 'png' not in filename:
-            y = filename[filename.index('kml')+3:]
-            if  y == 'forward_slash':
-                y = '/'
-        else:
-            y = filename[filename.index('kml')+3:-4]
-            if  y == 'forward_slash':
-                y = '/'
-
-        if y not in y_map:
-            y_map[y] = counter
-            counter += 1
-
-        DEV_X.append(array)
-        DEV_Y.append(y)
-
-
-
-    train_filenames = np.array(os.listdir(folders[0]+ folders[1]))
-
-    for index, filename in enumerate(train_filenames):
-        print "*********************************TRAIN FILE #{}".format(index)
-        if 'kml' not in filename:
-          continue
-        x = folders[0] + folders[1] + filename
-        image = Image.open(x).convert('L')
-        array = np.asarray(image)
-        array = array / 255.0
-      #  print "SHAPE: {}".format(array.shape)
-        array = array.flatten()
-
-        if 'png' not in filename:
-            y = filename[filename.index('kml')+3:]
-            if  y == 'forward_slash':
-                y = '/'
-        else:
-            y = filename[filename.index('kml')+3:-4]
-            if  y == 'forward_slash':
-                y = '/'
-           # print "Filename: {}, symbol: {}".format(x, y)
-
-        if y not in y_map:
-            y_map[y] = counter
-            counter += 1
-
-        TRAINING_X.append(array)
-        TRAINING_Y.append(y)
-
-
-    print len(TRAINING_Y), len(DEV_Y)
-    print "Shape: ", len(DEV_X[0])
-
-    return TRAINING_X, TRAINING_Y, DEV_X, DEV_Y, y_map
 
 
 
@@ -370,11 +233,9 @@ def main():
     global params
     global num_classes
     np.random.seed(100)
-  #  folders = ['/Users/norahborus/Documents/DATA/training_data/32x32/', 'CROHME_Characters/', 'CROHME_Characters/']
-    folders = ['/Users/norahborus/Documents/DATA/CLASSES/', 'random_sample_200/', 'random_sample_200/']
-  #  folders = ['/Users/norahborus/Documents/DATA/COMBINED/', '32x32_All/', '32x32_All/']
-    trainData ,trainLabels, testData, testLabels, y_map = get_training_data(folders)#get_training_data(folders)
-
+   # folders = ['/Users/norahborus/Documents/DATA/training_data/', '12_Characters/', 'TEST_Characters/']
+    folders = ['/Users/norahborus/Documents/DATA/training_data/200x200/', 'CROHME_Characters/', 'CROHME_Characters/']
+    trainData ,trainLabels, testData, testLabels, y_map = read_images_flattened(folders, segment=False)
     trainData = np.array(trainData)
     testData = np.array(testData)
     num_classes = len(y_map)
@@ -430,7 +291,7 @@ def main():
     params = nn_train(trainData, trainLabels, num_classes)
     readyForTesting = True
     if readyForTesting:
-        accuracy = nn_test(testData, testLabels, params, num_classes, y_map)
+        accuracy = nn_test(testData, testLabels, params, num_classes)
         print 'Test accuracy: %f' % accuracy
 
     return params, num_classes, y_map

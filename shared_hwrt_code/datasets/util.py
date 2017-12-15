@@ -131,10 +131,12 @@ import random
 from sklearn import datasets, svm, metrics
 from collections import defaultdict
 
-def svm_linear_test(clf, TEST_X, TEST_Y, y_map):
+def svm_linear_test(clf, TEST_X, TEST_Y,TRAINING_X, TRAINING_Y, y_map):
    # clf.decision_function_shape = "ovr"
     error = 0
     correct = 0
+    class_total = defaultdict(int)
+    class_correct = defaultdict(int)
     for i in range(len(TEST_X)):
         dec = clf.decision_function([TEST_X[i]])
         max_index = np.argmax(dec[0])
@@ -147,10 +149,74 @@ def svm_linear_test(clf, TEST_X, TEST_Y, y_map):
                 if symbol != TEST_Y[i]:
                     error += 1
                 else:
+                    class_correct[symbol] += 1
                     correct += 1
 
-    print "TEST Accuracy: {}".format(1.0 * correct / len(TEST_Y))
-    print "TEST Error: {}".format(1.0 * error / len(TEST_Y))
+                class_total[symbol] += 1
+
+
+    print "TEST Accuracy: {}".format(100.0 * correct / len(TEST_Y))
+    print "TEST Error: {}".format(100.0 * error / len(TEST_Y))
+
+    test_accuracy = 100.0 * correct / len(TEST_Y)
+
+
+    '''
+    print "CLASS ACCURACY:"
+    for symbol in y_map:
+        if class_total[symbol] == 0:
+            continue
+        accuracy = 100.0 * class_correct[symbol] / class_total[symbol]
+        print "Class --> {}, Accuracy --> {}".format(symbol, accuracy)
+
+
+    print "********************************************************"
+
+    '''
+    error = 0
+    correct = 0
+    class_total = defaultdict(int)
+    class_correct = defaultdict(int)
+    for i in range(len(TRAINING_X)):
+        dec = clf.decision_function([TRAINING_X[i]])
+        max_index = np.argmax(dec[0])
+        #   print "Len dec: {}, Dec: {}".format(len(dec[0]), dec[0])
+        # print "Max: {}".format(max(dec[0]))
+        #  print "Max index: {}".format(max_index)
+        for symbol, index in y_map.iteritems():
+            if index == max_index:
+                #  print "Matching symbol: {}, Truth: {}".format(symbol, TEST_Y[i])
+                if symbol != TRAINING_Y[i]:
+                    error += 1
+                else:
+                    class_correct[symbol] += 1
+                    correct += 1
+
+                class_total[symbol] += 1
+
+    print "TRAINING Accuracy: {}".format(100.0 * correct / len(TRAINING_Y))
+    print "TRAINING Error: {}".format(100.0 * error / len(TRAINING_Y))
+
+
+    train_accuracy = 100.0 * correct / len(TRAINING_Y)
+
+    '''
+    print "CLASS ACCURACY:"
+    for symbol in y_map:
+        if class_total[symbol] == 0:
+            continue
+        accuracy = 100.0 * class_correct[symbol] / class_total[symbol]
+        print "Class --> {}, Accuracy --> {}".format(symbol, accuracy)
+
+    print "********************************************************"
+    print "*****************SUMMARY******************************"
+
+    
+    print "TRAIN Accuracy: {}".format(train_accuracy)
+    print "TEST Accuracy: {}".format(test_accuracy)
+    '''
+    return test_accuracy, train_accuracy
+
 
 def svm_linear_train(TRAINING_X, TRAINING_Y, TEST_Y):
     y_map = {}
@@ -160,7 +226,7 @@ def svm_linear_train(TRAINING_X, TRAINING_Y, TEST_Y):
     freq = defaultdict(int)
     # print TRAINING_Y
     for y in TRAINING_Y:
-        print y, type(y)
+      #  print y, type(y)
         freq[y] += 1
         if y in y_map:
             NEW_TRAINING_Y.append(y_map[y])
@@ -173,7 +239,7 @@ def svm_linear_train(TRAINING_X, TRAINING_Y, TEST_Y):
     for y in TRAINING_Y:
         weights.append(1.0 / freq[y])
 
-    TRAINING_Y = NEW_TRAINING_Y
+    Y = NEW_TRAINING_Y
 
     for y in TEST_Y:
         if y in y_map:
@@ -187,15 +253,21 @@ def svm_linear_train(TRAINING_X, TRAINING_Y, TEST_Y):
     print "About to start fitting"
     print len(TRAINING_X)
 
-    clf = svm.SVC(decision_function_shape='ovo', gamma=0.01, C=100.0)
-    clf.fit(TRAINING_X, TRAINING_Y, weights)
-    clf.decision_function_shape = "ovr"
+    clfs = []
+
+  #  for val in range(1,11):
+    #clf = svm.LinearSVC(multi_class='ovr', C=val)
+    clf = svm.LinearSVC(C=0.01)#svm.SVC(gamma=val*1.0/100,C=50)
+    clf.fit(TRAINING_X, Y, weights)
+    #clf.decision_function_shape = "ovr"
+    clfs.append(clf)
 
     '''
     clf = svm.LinearSVC(multi_class='ovr', C=50.0)
     clf.fit(TRAINING_X, TRAINING_Y, weights)
     '''
-    return clf
+
+    return clfs, y_map
 
 import cPickle
 import numpy as np
