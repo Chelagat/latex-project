@@ -6,7 +6,7 @@ click==6.7
 cycler==0.10.0
 Cython==0.27.3
 decorator==4.1.2
-Django==1.11.7
+Django==2.2.24
 dominate==2.3.1
 Flask==0.12.2
 Flask-Bootstrap==3.3.7.1
