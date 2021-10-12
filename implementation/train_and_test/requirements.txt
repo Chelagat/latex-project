@@ -24,7 +24,7 @@ nntoolkit==0.1.29
 nose==1.3.7
 numpy==1.13.3
 olefile==0.44
-opencv-python==3.3.0.10
+opencv-python==3.4.0.12
 Optunity==1.1.1
 Pillow==2.9.0
 PyMySQL==0.7.11
