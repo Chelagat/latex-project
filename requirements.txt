@@ -17,7 +17,7 @@ idna==2.6
 image==1.5.16
 itsdangerous==0.24
 Jinja2==2.10
-lxml==4.1.1
+lxml==4.6.5
 MarkupSafe==1.0
 matplotlib==2.1.0
 natsort==5.1.0
